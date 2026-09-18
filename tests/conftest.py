@@ -9,7 +9,7 @@ into a migration fails here instead of in production.
 from __future__ import annotations
 
 import socket
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +21,7 @@ from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session
 
 from radar.core.settings import Settings
+from radar.pipeline import http as http_module
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -112,16 +113,49 @@ def vector_available(engine: Engine) -> bool:
         )
 
 
+class _HermeticSocket:
+    """A stand-in for the ``socket`` module with a scripted resolver.
+
+    The patch is applied to ``radar.pipeline.http``'s own reference rather than
+    to ``socket.getaddrinfo`` itself. Patching the module attribute globally
+    also redirected psycopg: the database fixtures connect lazily during test
+    setup, inside the patched window, so every database test in a module using
+    the hermetic resolver tried to reach PostgreSQL at the fake address and
+    waited out a TCP timeout. Anything this stub does not define falls through
+    to the real module.
+    """
+
+    def __init__(self, resolve: str | Callable[[str], str]) -> None:
+        self._resolve = resolve if callable(resolve) else (lambda _host: resolve)
+
+    def getaddrinfo(self, host: str, *args: Any, **kwargs: Any) -> list[Any]:
+        address = self._resolve(host)
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 0))]
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(socket, name)
+
+
 @pytest.fixture
-def public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Resolve any hostname to a public address.
+def patch_dns(monkeypatch: pytest.MonkeyPatch) -> Callable[[str | Callable[[str], str]], None]:
+    """Script what the outbound HTTP client sees when it resolves a hostname.
+
+    Takes either one address for every host, or a function from host to address
+    for tests that need a redirect target to resolve differently.
+    """
+
+    def apply(resolve: str | Callable[[str], str]) -> None:
+        monkeypatch.setattr(http_module, "socket", _HermeticSocket(resolve))
+
+    return apply
+
+
+@pytest.fixture
+def public_dns(patch_dns: Callable[[str | Callable[[str], str]], None]) -> None:
+    """Resolve any hostname the fetchers look up to a public address.
 
     Tests that exercise fetchers should not depend on the network: real lookups
     make the suite slow, and make it fail in sandboxes with no DNS. Tests that
-    are *about* address safety do their own resolution instead.
+    are *about* address safety script their own resolution with ``patch_dns``.
     """
-
-    def fake_getaddrinfo(host: str, *args: Any, **kwargs: Any) -> list[Any]:
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
-
-    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+    patch_dns("93.184.216.34")

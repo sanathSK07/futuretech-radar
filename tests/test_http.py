@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import socket
-from typing import Any
+from collections.abc import Callable
 
 import httpx
 import pytest
@@ -18,15 +18,11 @@ from radar.pipeline.http import (
     backoff_delay,
 )
 
+# The hermetic resolver lives in conftest.py so every fetcher test shares one
+# definition; this module keeps a handle on the real one to prove it survives.
+_REAL_GETADDRINFO = socket.getaddrinfo
 
-@pytest.fixture
-def public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Resolve every hostname to a public address, so tests need no network."""
-
-    def fake_getaddrinfo(host: str, *args: Any, **kwargs: Any) -> list[Any]:
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
-
-    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+PatchDns = Callable[[str | Callable[[str], str]], None]
 
 
 class TestUrlSafety:
@@ -63,15 +59,20 @@ class TestUrlSafety:
     def test_a_public_host_is_allowed(self, public_dns: None) -> None:
         assert_url_is_safe("https://export.arxiv.org/api/query")
 
-    def test_dns_rebinding_to_a_private_address_is_caught(
-        self, monkeypatch: pytest.MonkeyPatch
+    def test_the_hermetic_resolver_leaves_the_rest_of_the_process_alone(
+        self, public_dns: None
     ) -> None:
+        """Regression: the fixture used to patch socket.getaddrinfo globally.
+
+        psycopg then resolved the database host to the fake public address, and
+        every database test in a module using the fixture spent a TCP timeout
+        failing to connect.
+        """
+        assert socket.getaddrinfo is _REAL_GETADDRINFO
+
+    def test_dns_rebinding_to_a_private_address_is_caught(self, patch_dns: PatchDns) -> None:
         """A public-looking name whose A record points inside the network."""
-
-        def rebinding(host: str, *args: Any, **kwargs: Any) -> list[Any]:
-            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))]
-
-        monkeypatch.setattr(socket, "getaddrinfo", rebinding)
+        patch_dns("127.0.0.1")
         with pytest.raises(UnsafeUrlError, match="non-public"):
             assert_url_is_safe("https://totally-legitimate.example.org/feed")
 
@@ -107,16 +108,9 @@ class TestSafeHttpClient:
         ):
             client.get("https://export.arxiv.org/api/query")
 
-    def test_a_redirect_to_a_private_address_is_refused(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_a_redirect_to_a_private_address_is_refused(self, patch_dns: PatchDns) -> None:
         """Following redirects blindly is how an SSRF filter gets bypassed."""
-
-        def dns(host: str, *args: Any, **kwargs: Any) -> list[Any]:
-            address = "127.0.0.1" if host == "internal.example.org" else "93.184.216.34"
-            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 0))]
-
-        monkeypatch.setattr(socket, "getaddrinfo", dns)
+        patch_dns(lambda host: "127.0.0.1" if host == "internal.example.org" else "93.184.216.34")
         transport = httpx.MockTransport(
             lambda r: httpx.Response(302, headers={"location": "http://internal.example.org/x"})
         )

@@ -100,6 +100,33 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## A test fixture that broke the database tests, 2026-09-18
+
+The first run in which the database tests actually executed produced 17 errors,
+every one a `psycopg.OperationalError` reaching PostgreSQL at
+`93.184.216.34:5432` and waiting out a TCP timeout (97s for the suite). That
+address is not a server: it is the fake public address in the hermetic DNS
+fixture added the previous commit so the fetcher tests would need no network.
+
+The fixture patched `socket.getaddrinfo` on the `socket` module itself, which is
+process-wide. `tests/test_ingest.py` applies it to every test in the module
+through an autouse fixture, and the `session` fixture opens its connection
+lazily during test setup — inside the patched window. psycopg therefore resolved
+the Neon hostname through the fake resolver. `test_schema.py` passed only
+because it has no such autouse fixture.
+
+The fix scopes the patch to the module that is actually under test: a stub
+standing in for `radar.pipeline.http`'s own `socket` reference, delegating every
+attribute it does not define to the real module. Nothing outside the outbound
+HTTP client sees a patched resolver. The two tests that need a scripted resolver
+(DNS rebinding, redirect to a private address) now go through the same
+`patch_dns` fixture rather than patching the global, so the trap cannot be
+re-laid one test at a time. A regression test asserts that
+`socket.getaddrinfo` is still the real function while the fixture is active.
+
+The general lesson, worth applying to the rest of the pipeline: patch the name
+as the module under test binds it, not the shared object it points at.
+
 ## Live verification, 2026-09-18
 
 `make smoke-arxiv` was run against the real arXiv API on SK's Mac. The parser
@@ -142,13 +169,14 @@ uses HTTPS directly, and a test asserts the scheme so it cannot regress.
 - Corrections via GitHub Issues rather than an in-app workflow.
 - `TimestampMixin.updated_at` uses SQLAlchemy's `onupdate`, so a raw SQL UPDATE bypasses it. Acceptable while all writes go through the ORM; revisit with a trigger if the pipeline ever writes SQL directly.
 - No `pre-commit` hooks yet; `make check` covers the same ground manually.
+- mypy checks `packages = ["radar"]` only, so `tests/` is unchecked. Running it over the tests today reports five stale `# type: ignore` comments and nothing worse; widening the scope is cheap and should happen in Sprint 1.
 - A revised arXiv paper (v2) is skipped rather than updating the stored record: `ON CONFLICT DO NOTHING` is what guarantees idempotency, but it also means later metadata never lands. Revision handling belongs in Sprint 1, alongside triage.
 - Fetcher tests run against fixtures written from the published arXiv API documentation, not against recorded live responses, because this workspace's egress blocks `export.arxiv.org`. `make smoke-arxiv` is the compensating control and should be run whenever the parser changes.
 - The daily ingest workflow is scheduled but inert until the `RADAR_DATABASE_URL` and `RADAR_CRAWLER_CONTACT` repository secrets exist; it reports a notice and exits cleanly rather than failing.
 
 ## Known bugs
 
-- None open. Fixed during Task 3: the User-Agent gap and the `log.exception` crash described above.
+- None open. Fixed after Task 3: the hermetic DNS fixture redirected psycopg as well as the HTTP client, breaking all 17 database tests in `test_ingest.py` (written up above). Fixed during Task 3: the User-Agent gap and the `log.exception` crash described above.
 - Fixed during Task 2: the `.gitignore` pattern `models/` was unanchored and matched `src/radar/core/models/`, which would have silently excluded the whole ORM package from every commit. Now `/models/`, root-anchored, with a comment saying why. It had a second effect: ruff skips git-ignored paths, so those files were never linted — anchoring the pattern surfaced two real lint errors in them.
 
 ## Research gaps
