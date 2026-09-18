@@ -30,15 +30,32 @@ def test_defaults_are_conservative() -> None:
 @pytest.mark.parametrize(
     "url",
     [
-        "postgresql://u:p@localhost/radar",  # would silently select psycopg2
         "postgresql+psycopg2://u:p@localhost/radar",
         "sqlite:///radar.db",
-        "postgres://u:p@localhost/radar",
+        "mysql://u:p@localhost/radar",
+        "postgres://u:p@localhost/radar",  # the old Heroku alias, not a driver we have
     ],
 )
-def test_rejects_urls_that_would_pick_another_driver(url: str) -> None:
+def test_rejects_an_explicitly_wrong_driver(url: str) -> None:
     with pytest.raises(ValidationError, match="psycopg"):
         _settings(database_url=url)
+
+
+def test_a_bare_postgresql_url_is_upgraded_to_psycopg() -> None:
+    """Neon, Render and Supabase all hand out bare postgresql:// URLs."""
+    settings = _settings(
+        database_url="postgresql://user:pw@ep-cool-name.aws.neon.tech/radar?sslmode=require"
+    )
+    assert settings.database_url == (
+        "postgresql+psycopg://user:pw@ep-cool-name.aws.neon.tech/radar?sslmode=require"
+    )
+
+
+def test_query_parameters_survive_the_upgrade() -> None:
+    settings = _settings(
+        database_url="postgresql://u:p@host/db?sslmode=require&channel_binding=require"
+    )
+    assert settings.database_url.endswith("?sslmode=require&channel_binding=require")
 
 
 def test_database_url_is_required(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -51,21 +51,30 @@ class Settings(BaseSettings):
 
     @field_validator("database_url", "test_database_url")
     @classmethod
-    def _require_psycopg_driver(cls, value: str | None) -> str | None:
-        """Reject URLs that would silently fall back to an unavailable driver.
+    def _normalise_driver(cls, value: str | None) -> str | None:
+        """Pin the URL to psycopg (v3), the only PostgreSQL driver installed.
 
-        SQLAlchemy defaults ``postgresql://`` to psycopg2, which this project does
-        not install; the resulting ImportError at connect time is far less clear
-        than failing here.
+        Hosted PostgreSQL providers (Neon, Render, Supabase, Heroku) all hand out
+        ``postgresql://``, which SQLAlchemy resolves to psycopg2 and fails at
+        connect time with an ImportError that says nothing useful. Rather than
+        making every developer and every deployment secret edit the scheme by
+        hand, a bare ``postgresql://`` is upgraded here.
+
+        An explicitly wrong driver is still an error: asking for psycopg2 or a
+        different database is a mistake worth surfacing, not guessing at.
         """
         if value is None:
             return None
-        if not value.startswith("postgresql+psycopg://"):
-            raise ValueError(
-                "database URLs must use the psycopg (v3) driver, "
-                f"i.e. start with 'postgresql+psycopg://', got: {value.split('://')[0]}://"
-            )
-        return value
+        if value.startswith("postgresql+psycopg://"):
+            return value
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg://", 1)
+
+        scheme = value.split("://", 1)[0] if "://" in value else value
+        raise ValueError(
+            "database URLs must be PostgreSQL over the psycopg (v3) driver: pass "
+            f"'postgresql://…' or 'postgresql+psycopg://…', got '{scheme}://'"
+        )
 
 
 @lru_cache(maxsize=1)
