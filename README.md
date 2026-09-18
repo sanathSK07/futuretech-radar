@@ -90,6 +90,11 @@ make smoke-arxiv  # one live arXiv request, prints what was parsed, writes nothi
 make ingest       # ingest the last day from every active source
 ```
 
+If the database password is ever exposed — an error dump prints connection
+parameters in the clear, so it happens — reset it in the provider's console and
+then run `python scripts/rotate_db_password.py`, which reads the new one from a
+hidden prompt and rewrites both URLs in `.env` without echoing it anywhere.
+
 Set `RADAR_CRAWLER_CONTACT` in `.env` before ingesting: every outbound request
 carries it in the User-Agent so source operators can reach a human, and
 ingestion refuses to run without it.
