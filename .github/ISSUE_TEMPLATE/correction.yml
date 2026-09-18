@@ -1,0 +1,41 @@
+name: Correction
+description: Report an incorrect claim, stage, source, date or organisation on a FutureTech Radar record.
+title: "[Correction] "
+labels: ["correction", "needs-review"]
+body:
+  - type: input
+    id: record
+    attributes:
+      label: Record URL or ID
+      description: The technology, development, claim or organisation this concerns.
+      placeholder: https://… or a UUID
+    validations:
+      required: true
+  - type: dropdown
+    id: field
+    attributes:
+      label: What is wrong?
+      options:
+        - Claim text does not match the quote
+        - Quote is not in the cited source
+        - Wrong claim type (e.g. an expectation labelled as a fact)
+        - Maturity stage is not supported by the cited evidence
+        - Wrong or missing date
+        - Wrong organisation
+        - Duplicate record
+        - Stale (newer evidence exists)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What should it say instead, and why?
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Supporting source (URL)
+      description: A primary or reputable source that supports the correction, with its publication date if known.
