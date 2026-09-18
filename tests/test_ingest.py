@@ -61,8 +61,18 @@ def arxiv_spec(source_id: str = "arxiv-cs-ro") -> SourceSpec:
 
 
 def client_serving(body: str, *, status: int = 200) -> SafeHttpClient:
+    """A client that always answers the same way.
+
+    max_attempts=1 because these tests assert on how ingestion records a
+    failure, not on retry behaviour; retries are covered in test_http.py and
+    would otherwise make this suite sleep through real backoff.
+    """
     transport = httpx.MockTransport(lambda request: httpx.Response(status, text=body))
-    return SafeHttpClient(contact="test@example.org", client=httpx.Client(transport=transport))
+    return SafeHttpClient(
+        contact="test@example.org",
+        client=httpx.Client(transport=transport),
+        max_attempts=1,
+    )
 
 
 def count_documents(session: Session, source_id: str) -> int:

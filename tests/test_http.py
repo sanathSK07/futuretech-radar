@@ -9,10 +9,13 @@ import httpx
 import pytest
 
 from radar.pipeline.http import (
+    TRANSIENT_STATUSES,
     ResponseTooLargeError,
     SafeHttpClient,
+    TransientHttpError,
     UnsafeUrlError,
     assert_url_is_safe,
+    backoff_delay,
 )
 
 
@@ -134,9 +137,136 @@ class TestSafeHttpClient:
             client.get("https://export.arxiv.org/api/query")
 
     def test_an_http_error_is_raised(self, public_dns: None) -> None:
-        transport = httpx.MockTransport(lambda r: httpx.Response(503))
+        # 404, not 503: transient statuses are retried now, and retry exhaustion
+        # has its own test. This one is about a permanent error propagating.
+        transport = httpx.MockTransport(lambda r: httpx.Response(404))
         with (
             SafeHttpClient(contact="a@b.org", client=httpx.Client(transport=transport)) as client,
             pytest.raises(httpx.HTTPStatusError),
         ):
             client.get("https://export.arxiv.org/api/query")
+
+
+class RecordingSleep:
+    """Captures backoff delays instead of spending them."""
+
+    def __init__(self) -> None:
+        self.delays: list[float] = []
+
+    def __call__(self, seconds: float) -> None:
+        self.delays.append(seconds)
+
+
+class TestTransientRetries:
+    """arXiv answers 406 when shedding load, and the same request then succeeds.
+
+    Treating that as a hard client error made three categories fail on every
+    run while their neighbours, fetched seconds apart, returned 200.
+    """
+
+    def _client(
+        self, responses: list[httpx.Response], *, sleep: RecordingSleep, max_attempts: int = 4
+    ) -> SafeHttpClient:
+        calls = {"n": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            index = min(calls["n"], len(responses) - 1)
+            calls["n"] += 1
+            return responses[index]
+
+        return SafeHttpClient(
+            contact="a@b.org",
+            client=httpx.Client(transport=httpx.MockTransport(handler)),
+            max_attempts=max_attempts,
+            sleep=sleep,
+        )
+
+    def test_406_is_treated_as_a_throttle_and_retried(self, public_dns: None) -> None:
+        sleep = RecordingSleep()
+        client = self._client(
+            [httpx.Response(406), httpx.Response(200, text="<feed/>")], sleep=sleep
+        )
+        result = client.get("https://export.arxiv.org/api/query")
+        assert result.text == "<feed/>"
+        assert len(sleep.delays) == 1, "it waited once before succeeding"
+
+    @pytest.mark.parametrize("status", sorted(TRANSIENT_STATUSES))
+    def test_every_transient_status_is_retried(self, status: int, public_dns: None) -> None:
+        sleep = RecordingSleep()
+        client = self._client([httpx.Response(status), httpx.Response(200, text="ok")], sleep=sleep)
+        assert client.get("https://export.arxiv.org/api/query").text == "ok"
+
+    def test_a_permanent_error_is_not_retried(self, public_dns: None) -> None:
+        """404 means the URL is wrong; waiting will not change that."""
+        sleep = RecordingSleep()
+        client = self._client([httpx.Response(404)], sleep=sleep)
+        with pytest.raises(httpx.HTTPStatusError):
+            client.get("https://export.arxiv.org/api/query")
+        assert sleep.delays == [], "no time wasted on a permanent failure"
+
+    def test_it_gives_up_after_the_attempt_budget(self, public_dns: None) -> None:
+        sleep = RecordingSleep()
+        client = self._client([httpx.Response(406)], sleep=sleep, max_attempts=3)
+        with pytest.raises(httpx.HTTPStatusError):
+            client.get("https://export.arxiv.org/api/query")
+        assert len(sleep.delays) == 2, "slept between attempts, not after the last"
+
+    def test_retry_after_is_honoured_over_backoff(self, public_dns: None) -> None:
+        sleep = RecordingSleep()
+        client = self._client(
+            [
+                httpx.Response(429, headers={"retry-after": "7"}),
+                httpx.Response(200, text="ok"),
+            ],
+            sleep=sleep,
+        )
+        client.get("https://export.arxiv.org/api/query")
+        assert sleep.delays == [7.0]
+
+    def test_an_unparseable_retry_after_falls_back_to_backoff(self, public_dns: None) -> None:
+        sleep = RecordingSleep()
+        client = self._client(
+            [
+                httpx.Response(503, headers={"retry-after": "Wed, 21 Oct 2026 07:28:00 GMT"}),
+                httpx.Response(200, text="ok"),
+            ],
+            sleep=sleep,
+        )
+        client.get("https://export.arxiv.org/api/query")
+        assert len(sleep.delays) == 1
+        assert sleep.delays[0] >= 0
+
+    def test_the_accept_header_names_atom(self, public_dns: None) -> None:
+        seen: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.update(request.headers)
+            return httpx.Response(200, text="<feed/>")
+
+        with SafeHttpClient(
+            contact="a@b.org", client=httpx.Client(transport=httpx.MockTransport(handler))
+        ) as client:
+            client.get("https://export.arxiv.org/api/query")
+        assert "atom" in seen["accept"]
+
+
+class TestBackoffDelay:
+    def test_it_grows_with_each_attempt(self) -> None:
+        early = max(backoff_delay(0) for _ in range(200))
+        late = max(backoff_delay(3) for _ in range(200))
+        assert late > early
+
+    def test_it_is_jittered_rather_than_fixed(self) -> None:
+        """Without jitter, every source on a host retries at the same instant."""
+        samples = {backoff_delay(2) for _ in range(50)}
+        assert len(samples) > 1
+
+    def test_it_is_capped(self) -> None:
+        assert all(backoff_delay(50) <= 60.0 for _ in range(100))
+
+    def test_it_is_never_negative(self) -> None:
+        assert all(backoff_delay(n) >= 0 for n in range(10))
+
+
+def test_transient_error_type_is_exported() -> None:
+    assert issubclass(TransientHttpError, RuntimeError)

@@ -9,7 +9,10 @@ honest User-Agent that names the project and a contact address.
 from __future__ import annotations
 
 import ipaddress
+import random
 import socket
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -28,6 +31,20 @@ DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_BYTES = 5 * 1024 * 1024
 ALLOWED_SCHEMES = frozenset({"http", "https"})
 
+TRANSIENT_STATUSES = frozenset({406, 408, 425, 429, 500, 502, 503, 504})
+"""Statuses worth retrying rather than failing the source on.
+
+406 is here for a specific, verified reason. Content negotiation is not what
+arXiv means by it: export.arxiv.org answers 406 when shedding load, and the same
+request succeeds moments later. Treating it as a hard client error meant three
+categories failed every run while their neighbours, fetched seconds apart,
+returned 200.
+"""
+
+DEFAULT_MAX_ATTEMPTS = 4
+DEFAULT_BACKOFF_BASE_SECONDS = 2.0
+MAX_BACKOFF_SECONDS = 60.0
+
 
 class UnsafeUrlError(ValueError):
     """The URL points somewhere we refuse to fetch from."""
@@ -35,6 +52,31 @@ class UnsafeUrlError(ValueError):
 
 class ResponseTooLargeError(ValueError):
     """The response exceeded the byte cap."""
+
+
+class TransientHttpError(RuntimeError):
+    """A retryable status kept recurring until the attempts ran out."""
+
+
+def backoff_delay(attempt: int, *, base: float = DEFAULT_BACKOFF_BASE_SECONDS) -> float:
+    """Exponential backoff with full jitter, capped.
+
+    Jitter matters when several sources share a host: without it, every retry
+    after a load-shedding event lands at the same instant and sheds load again.
+    """
+    ceiling = min(base * (2**attempt), MAX_BACKOFF_SECONDS)
+    return random.uniform(0, ceiling)  # noqa: S311 - jitter, not cryptography
+
+
+def retry_after_seconds(response: httpx.Response) -> float | None:
+    """Honour a numeric Retry-After header when the server sends one."""
+    raw = response.headers.get("retry-after")
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw.strip()))
+    except ValueError:
+        return None
 
 
 def _is_forbidden_address(address: str) -> bool:
@@ -104,6 +146,8 @@ class SafeHttpClient:
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_bytes: int = DEFAULT_MAX_BYTES,
         client: httpx.Client | None = None,
+        max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+        sleep: Callable[[float], None] | None = None,
     ) -> None:
         if not contact:
             raise ValueError(
@@ -112,6 +156,8 @@ class SafeHttpClient:
             )
         self.limiter = limiter
         self.max_bytes = max_bytes
+        self.max_attempts = max(1, max_attempts)
+        self._sleep = sleep or time.sleep
         self._client = client or httpx.Client(
             timeout=timeout_seconds,
             follow_redirects=False,  # redirects are re-validated by hand below
@@ -120,9 +166,42 @@ class SafeHttpClient:
         # injected client would otherwise fetch anonymously, and identifying
         # ourselves to source operators is not optional.
         self._client.headers["User-Agent"] = USER_AGENT_TEMPLATE.format(contact=contact)
+        # Assigned rather than setdefault: httpx installs a default "*/*" of its own,
+        # which setdefault would treat as a deliberate caller choice.
+        self._client.headers["Accept"] = "application/atom+xml, application/xml, */*"
         self._client.follow_redirects = False
 
     def get(self, url: str, *, max_redirects: int = 3) -> FetchResult:
+        """GET a URL, retrying transient failures with backoff.
+
+        Retries wrap the whole redirect walk, so a throttled request is reissued
+        from its original URL rather than from wherever the last hop left off.
+        """
+        last_status: int | None = None
+        for attempt in range(self.max_attempts):
+            try:
+                return self._get_once(url, max_redirects=max_redirects)
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status not in TRANSIENT_STATUSES or attempt == self.max_attempts - 1:
+                    raise
+                last_status = status
+                delay = retry_after_seconds(exc.response) or backoff_delay(attempt)
+                log.warning(
+                    "transient_http_status",
+                    url=url,
+                    status=status,
+                    attempt=attempt + 1,
+                    of=self.max_attempts,
+                    retrying_in_seconds=round(delay, 1),
+                )
+                self._sleep(delay)
+
+        raise TransientHttpError(
+            f"{url} kept returning {last_status} after {self.max_attempts} attempts"
+        )
+
+    def _get_once(self, url: str, *, max_redirects: int = 3) -> FetchResult:
         """GET a URL, validating it and every redirect hop."""
         current = url
         for hop in range(max_redirects + 1):

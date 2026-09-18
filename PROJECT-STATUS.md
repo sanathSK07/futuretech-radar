@@ -41,6 +41,37 @@ Living tracker. Update at the end of every working session. Newest entries first
 
 - Q1 resolved: the repository is public. · Q2 name/domain · Q3 Anthropic-only · Q4 curator time commitment · Q5 demo date · Q6 seed list authorship · Q7 admin UI location · Q8 English-only. Defaults listed in `docs/08`.
 
+## First real ingestion, 2026-09-18
+
+`make ingest` against Neon pulled **218 arXiv documents** across eight
+categories on its first run. Two defects surfaced.
+
+**46 database tests were skipping in silence.** `conftest.py` read
+`os.environ` directly, and pytest does not load `.env`, so a developer with a
+correct `.env` saw `86 passed, 46 skipped` — a green run that had never touched
+a database. Everything Sprint 0 exists to guarantee, the idempotency test
+included, was among the skipped. Fixed by reading the test database URL through
+`Settings` (which honours `.env`), adding a `pytest_report_header` line that
+states on every run whether database tests are enabled and against which host,
+and replacing `-q` with `-ra` in `addopts` so skips are always summarised. A
+skipped suite must never again look like a passing one.
+
+**Three categories failed with HTTP 406.** cs.AR, cs.ET and physics.plasm-ph
+returned `406 Not Acceptable` while their neighbours, fetched seconds apart,
+returned 200. arXiv's 406 is not content negotiation: `export.arxiv.org` answers
+it when shedding load, and the identical request succeeds moments later. This is
+documented by others hitting the same wall — one project tried rotating Accept
+headers first and found that diagnosis wrong before settling on backoff
+([luria #292](https://github.com/dmarx/luria/issues/292),
+[arXivScooper #17](https://github.com/pquarterman17/arXivScooper/pull/17)).
+
+The underlying gap was that the HTTP client had no retry logic at all. It now
+retries 406, 408, 425, 429, 500, 502, 503 and 504 with exponential backoff and
+full jitter, honouring `Retry-After` when present, capped at 60 seconds and four
+attempts. Jitter is not decoration: without it every source sharing a host
+retries at the same instant and sheds load again. Permanent errors are still
+raised immediately.
+
 ## Reproducibility defect found on first setup, 2026-09-18
 
 `make check` failed on SK's Mac with `ModuleNotFoundError: No module named

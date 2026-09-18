@@ -156,6 +156,7 @@ class TestArxivFetcher:
         return SafeHttpClient(
             contact="test@example.org",
             client=httpx.Client(transport=httpx.MockTransport(handler)),
+            max_attempts=1,
         )
 
     def test_the_query_url_is_built_correctly(self) -> None:

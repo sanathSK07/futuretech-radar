@@ -8,7 +8,6 @@ into a migration fails here instead of in production.
 
 from __future__ import annotations
 
-import os
 import socket
 from collections.abc import Iterator
 from pathlib import Path
@@ -17,14 +16,43 @@ from typing import Any
 import pytest
 from alembic import command
 from alembic.config import Config
+from pydantic import ValidationError
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session
+
+from radar.core.settings import Settings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _test_database_url() -> str | None:
-    return os.environ.get("RADAR_TEST_DATABASE_URL")
+    """The test database URL, from the environment or from .env.
+
+    Read through Settings rather than os.environ. Reading the environment
+    directly meant a developer with a perfectly good .env saw every database
+    test skip in silence, and a green "86 passed" that had never touched a
+    database — the idempotency guarantee included.
+    """
+    try:
+        return Settings().test_database_url  # type: ignore[call-arg]
+    except ValidationError:
+        return None
+
+
+def pytest_report_header() -> str:
+    """Say up front whether the database tests will actually run.
+
+    A skip is invisible under -q, so without this line a misconfigured
+    environment looks exactly like a passing one.
+    """
+    url = _test_database_url()
+    if not url:
+        return (
+            "database tests: SKIPPED - set RADAR_TEST_DATABASE_URL in .env or the "
+            "environment to run them"
+        )
+    target = url.rsplit("@", 1)[-1]  # never print credentials
+    return f"database tests: enabled against {target}"
 
 
 @pytest.fixture(scope="session")

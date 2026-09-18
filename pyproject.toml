@@ -69,5 +69,7 @@ testpaths = ["tests"]
 # src-layout: put the package on sys.path explicitly rather than relying on the
 # editable install's .pth file resolving in every environment.
 pythonpath = ["src"]
-addopts = "-q --strict-markers"
+# -ra summarises skips and failures; without it a skipped suite looks identical
+# to a passing one.
+addopts = "--strict-markers -ra"
 markers = ["db: requires a live PostgreSQL with pgvector"]
