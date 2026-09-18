@@ -50,6 +50,12 @@ ignore = ["S101"]  # assert is fine in tests
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/*" = ["N999", "E501"]
+# RUF001 flags characters that can be confused with ASCII. This module's
+# entire purpose is mapping those characters to their ASCII equivalents, so
+# every one of them has to appear in it literally.
+"src/radar/pipeline/grounding.py" = ["RUF001"]
+# The same applies to the tests that feed it those characters.
+"tests/test_grounding.py" = ["RUF001"]
 "tests/*" = ["S105", "S106"]
 
 [tool.mypy]

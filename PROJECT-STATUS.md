@@ -100,6 +100,42 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## Sprint 1 Task 2: grounding and contracts, 2026-09-18
+
+`radar.pipeline.grounding` verifies quotes; `radar.pipeline.contracts` defines
+what a model is allowed to return. 31 new tests, most of them attempts to get
+something ungrounded past the check. 205 tests pass.
+
+Decisions beyond what docs/04 specified:
+
+- **A quote shorter than 24 characters cannot verify.** Without a floor, a model
+  returning "the" would verify against every document ever written, and the
+  grounding metric would read 100% exactly when the extraction supported
+  nothing. The failure mode is not hypothetical: a cheap model under a
+  "must include a quote" instruction will return the shortest string that
+  satisfies it.
+- **A quote longer than 600 characters cannot verify either.** Evidence that is
+  six paragraphs has not isolated an assertion, and no reviewer checks it.
+- **Metric values must appear in the quote**, enforced in the Pydantic
+  validator, not only in the prompt. This is the rule that stops a model
+  supplying a figure it knows from training when the document does not state
+  it — the most plausible-looking kind of fabrication, and the hardest to spot
+  by reading.
+- **`extra="forbid"` on every contract.** A model that invents a field means the
+  prompt and the contract have drifted; dropping it silently hides that.
+- **Triage returns a boolean and a confidence, not a relevance score.** A score
+  invites a tuned threshold nobody can explain afterwards. A decision with a
+  stated reason can be audited by reading it.
+- **Normalisation preserves case.** Unicode forms, quote and dash shapes,
+  non-breaking spaces and hyphenated line breaks are all normalised, because
+  those differ between a publisher's HTML, a PDF extraction and a model's
+  output without changing the words. Case is not normalised: "US" and "us"
+  differ, and a recapitalised quote has been edited.
+
+What quote verification does not catch, recorded so it is not mistaken for
+more: a real quote paired with a misleading paraphrase, and a real quote given
+the wrong claim type. Those need the labelled set and reviewer spot-checks.
+
 ## Sprint 1 Task 1: schema v1, 2026-09-18
 
 Eleven tables added in migration `0002`: `domain`, `technology`,
