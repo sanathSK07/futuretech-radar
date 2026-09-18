@@ -13,10 +13,13 @@ help: ## Show this help
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: setup
-setup: ## Create the virtualenv and install dependencies
-	$(UV) venv --python 3.12
-	$(UV) pip install -e ".[dev]"
+setup: ## Create the virtualenv and install the locked dependencies
+	$(UV) sync --extra dev
 	@test -f .env || (cp .env.example .env && echo "created .env from .env.example")
+
+.PHONY: lock
+lock: ## Re-resolve dependencies and update uv.lock
+	$(UV) lock
 
 .PHONY: db-up
 db-up: ## Start PostgreSQL 16 + pgvector and wait for it

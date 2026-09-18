@@ -56,9 +56,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.preflight.outputs.configured == 'true'
-        run: |
-          uv venv --python 3.12
-          uv pip install -e "."
+        run: uv sync --locked --no-dev
 
       - name: Apply migrations
         if: steps.preflight.outputs.configured == 'true'

@@ -66,5 +66,8 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# src-layout: put the package on sys.path explicitly rather than relying on the
+# editable install's .pth file resolving in every environment.
+pythonpath = ["src"]
 addopts = "-q --strict-markers"
 markers = ["db: requires a live PostgreSQL with pgvector"]

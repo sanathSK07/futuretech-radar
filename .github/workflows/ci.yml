@@ -55,9 +55,7 @@ jobs:
             -c 'CREATE DATABASE radar_test OWNER radar'
 
       - name: Install dependencies
-        run: |
-          uv venv --python 3.12
-          uv pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
 
       - name: Lint
         run: |

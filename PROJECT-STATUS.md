@@ -41,6 +41,34 @@ Living tracker. Update at the end of every working session. Newest entries first
 
 - Q1 resolved: the repository is public. · Q2 name/domain · Q3 Anthropic-only · Q4 curator time commitment · Q5 demo date · Q6 seed list authorship · Q7 admin UI location · Q8 English-only. Defaults listed in `docs/08`.
 
+## Reproducibility defect found on first setup, 2026-09-18
+
+`make check` failed on SK's Mac with `ModuleNotFoundError: No module named
+'radar'` across every test module, while `make migrate` and `make smoke-arxiv`
+on the same machine worked — so the package was importable outside pytest.
+
+Investigating it exposed a larger problem than the symptom. `uv.lock` was
+committed but nothing used it: `make setup` and both CI workflows ran
+`uv pip install`, which resolves fresh and ignores the lockfile entirely. The
+same commit therefore produced pytest 9.1.1 / mypy 2.3.1 / ruff 0.16.8 on SK's
+Mac and pytest 8.3 / mypy 1.14 / ruff 0.8 in the development container, with CI
+free to pick a third set. The lockfile was decoration, and "it passes on my
+machine" meant nothing. It was also stale — generated at the end of Task 2, so
+it contained none of Task 3's dependencies (httpx, defusedxml, respx).
+
+Fixed: `uv.lock` regenerated; `make setup` now runs `uv sync --extra dev`; both
+workflows run `uv sync --locked`, which additionally fails CI if someone edits
+`pyproject.toml` without re-locking. Verified by deleting the virtualenv and
+rebuilding from the lock: 132 tests pass on the newer toolchain, with ruff and
+mypy clean.
+
+Also added `pythonpath = ["src"]` to the pytest configuration, so the suite
+finds the package through the src layout rather than depending on the editable
+install's `.pth` file resolving identically in every environment. Honest
+caveat: the original import failure was never reproduced in the development
+container — a clean lockfile-based install and the explicit `pythonpath` both
+address it, but the precise cause on that machine is unconfirmed.
+
 ## Live verification, 2026-09-18
 
 `make smoke-arxiv` was run against the real arXiv API on SK's Mac. The parser
