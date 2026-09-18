@@ -73,11 +73,15 @@ Python 3.12 (FastAPI, SQLAlchemy 2, Pydantic v2), Next.js 15 / TypeScript, Postg
 
 ## Running it
 
-Requires Docker and [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/) and a PostgreSQL 16+ with pgvector.
+Docker is the easy path; any hosted PostgreSQL with the `vector` extension works
+too — put its URL in `RADAR_DATABASE_URL` and a *separate* database in
+`RADAR_TEST_DATABASE_URL`, because the test suite drops and rebuilds its schema
+on every run.
 
 ```bash
 make setup        # virtualenv, dependencies, .env from .env.example
-make db-up        # PostgreSQL 16 + pgvector on localhost:5433
+make db-up        # optional: PostgreSQL 16 + pgvector on localhost:5433, via Docker
 make migrate      # apply migrations
 make check        # lint, strict type check, tests
 

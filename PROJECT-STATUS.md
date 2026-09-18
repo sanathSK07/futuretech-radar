@@ -100,6 +100,38 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## CI had never passed, 2026-09-18
+
+Checking the run history after the DNS fix landed: runs 1, 2, 3 and 9 failed,
+and 4 through 8 were cancelled by the concurrency group as the next push
+superseded them. **No CI run has ever been green.** The queue-and-cancel noise
+made the history look busy rather than broken, and nothing in the local
+workflow surfaced it — `make check` passes on a developer machine.
+
+The cause is one line, present since the first CI commit (`d5fab43`). The
+workflow sets `RADAR_ENVIRONMENT: ci` for the whole job, and
+`test_defaults_are_conservative` asserts `settings.environment == "local"`.
+`Settings(_env_file=None, …)` blocks the `.env` file but not the process
+environment, so CI's own variable became the input the test was asserting
+against. It failed on every run and passed on every laptop.
+
+Fixed by an autouse fixture in `tests/test_settings.py` that strips every
+`RADAR_`-prefixed variable from the environment for that module. That is the
+second bug of this exact shape — the first was `test_database_url_is_required`
+being masked by an ambient variable — so the rule is now explicit: a test that
+asserts on configuration defaults must own its environment, not inherit one.
+
+Two lessons recorded rather than fixed by this commit:
+
+- A red CI that nobody reads is worse than no CI, because it buys the
+  confidence without the evidence. Run status is checked on every push from
+  here on, and Sprint 1 starts by turning on failure notifications.
+- The cloud workspace turned out to have PostgreSQL 16 and pgvector 0.6.0
+  installed, so the database tests can be run there before a push instead of
+  waiting for SK's Mac or for CI. The full 152-test suite now runs against a
+  local cluster on port 5433 in about a second, under the same environment
+  variables CI sets. This is what caught the failure above.
+
 ## A test fixture that broke the database tests, 2026-09-18
 
 The first run in which the database tests actually executed produced 17 errors,
@@ -176,7 +208,7 @@ uses HTTPS directly, and a test asserts the scheme so it cannot regress.
 
 ## Known bugs
 
-- None open. Fixed after Task 3: the hermetic DNS fixture redirected psycopg as well as the HTTP client, breaking all 17 database tests in `test_ingest.py` (written up above). Fixed during Task 3: the User-Agent gap and the `log.exception` crash described above.
+- None open. Fixed after Task 3: `test_defaults_are_conservative` read CI's own `RADAR_ENVIRONMENT=ci` and had failed every CI run since the workflow existed (written up above); and the hermetic DNS fixture redirected psycopg as well as the HTTP client, breaking all 17 database tests in `test_ingest.py`. Fixed during Task 3: the User-Agent gap and the `log.exception` crash described above.
 - Fixed during Task 2: the `.gitignore` pattern `models/` was unanchored and matched `src/radar/core/models/`, which would have silently excluded the whole ORM package from every commit. Now `/models/`, root-anchored, with a comment saying why. It had a second effect: ruff skips git-ignored paths, so those files were never linted — anchoring the pattern surfaced two real lint errors in them.
 
 ## Research gaps
