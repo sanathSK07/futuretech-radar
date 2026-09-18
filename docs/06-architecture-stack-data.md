@@ -44,24 +44,33 @@ Verified on 2026-09-17: Neon Free plan limits ([Neon FAQ](https://neon.com/faqs/
 
 ### I.3 Repository structure
 
+Implemented in Sprint 0. The Phase 1 sketch had three separate distributions
+under `packages/` (`core`, `pipeline`, `api`); that was changed to one
+distribution with subpackages under `src/radar/` because all three share a
+dependency set and ship together — the pipeline runs in GitHub Actions and the
+API on Render, both from this one repository. Separate distributions would have
+required uv workspace tooling and three `pyproject.toml` files to buy nothing.
+Imports read `from radar.core.models import Source`.
+
 ```
 futuretech-radar/
 ├── README.md
-├── ARCHITECTURE.md              # short; links to docs/
 ├── PROJECT-STATUS.md            # living task list, debt, gaps
-├── LICENSE (MIT) · DATA-LICENSE (CC-BY-4.0)
+├── LICENSE (MIT) · DATA-LICENSE.md (CC BY 4.0) · SECURITY.md
 ├── docs/                        # this document set + decisions/
-├── sources.yaml                 # source registry
-├── seeds/                       # technologies.yaml, domains.yaml, aliases.yaml
-├── eval/                        # labelled sets + eval runner
-├── packages/
-│   ├── core/                    # SQLAlchemy models, Pydantic schemas, settings
-│   ├── pipeline/                # fetchers/, normalise/, dedupe/, extract/, resolve/, assess/, prompts/, cli.py
-│   └── api/                     # FastAPI app: routers/, deps/, auth/
-├── web/                         # Next.js app
-├── infra/                       # docker-compose.yml, Dockerfiles, render.yaml
+├── sources.yaml                 # source registry              (Sprint 0 Task 3)
+├── seeds/                       # technologies, domains, aliases (Sprint 2)
+├── eval/                        # labelled sets + eval runner    (Sprint 1)
+├── src/radar/
+│   ├── core/                    # settings, db, types, models/
+│   ├── pipeline/                # fetchers, normalise, dedupe, extract, assess, prompts, cli
+│   └── api/                     # FastAPI: routers, deps, auth   (Sprint 3)
+├── migrations/                  # Alembic env + versions/
+├── tests/
+├── web/                         # Next.js app                    (Sprint 3)
+├── infra/                       # docker-compose.yml, initdb/
 ├── .github/workflows/           # ci.yml, ingest-daily.yml, eval.yml
-├── pyproject.toml · uv.lock · Makefile
+├── alembic.ini · pyproject.toml · uv.lock · Makefile · .env.example
 ```
 
 ---
@@ -203,7 +212,7 @@ CREATE TABLE fetch_run (
 CREATE TABLE source_document (
   id              uuid PRIMARY KEY,
   source_id       text NOT NULL REFERENCES source(id),
-  external_id     text,                         -- arXiv id, DOI, feed guid
+  external_id     text NOT NULL,                -- arXiv id, DOI, feed guid; falls back to url
   canonical_ids   jsonb NOT NULL DEFAULT '{}',  -- {doi, arxiv, openalex, s2}
   url             text NOT NULL,
   title           text NOT NULL,
@@ -219,8 +228,8 @@ CREATE TABLE source_document (
   duplicate_of    uuid REFERENCES source_document(id),
   fetch_run_id    uuid REFERENCES fetch_run(id),
   search_tsv      tsvector GENERATED ALWAYS AS (to_tsvector('english', coalesce(title,'') || ' ' || coalesce(abstract,''))) STORED,
-  UNIQUE (source_id, external_id),
-  UNIQUE (content_hash)
+  UNIQUE (source_id, external_id)
+  -- content_hash is indexed, NOT unique: see the note in K.3.
 );
 CREATE INDEX ON source_document USING gin (search_tsv);
 CREATE INDEX ON source_document (published_at DESC);
@@ -419,6 +428,7 @@ CREATE TABLE research_activity (
 - **Versioning without a generic history table.** Assessments and ratings are append-only with `version`; claims are never mutated after confirmation (edits create a new claim and retract the old). `review_action.before/after` gives field-level history for everything else. This is simpler than triggers or temporal tables and sufficient for the MVP.
 - **Graph in Postgres.** `technology_relation` is an edge table; 2–3 hop dependency queries use recursive CTEs. A graph database is unjustified below ~10⁵ edges (ADR-0002).
 - **Vectors in Postgres.** 384-d embeddings with HNSW, one per document, technology and development; at MVP scale (< 50k rows) query latency is milliseconds. Neon's 0.5 GB storage is the binding constraint: 50k document vectors × 384 × 4 bytes ≈ 77 MB plus abstracts; full-text `content_text` is transient (cleared after extraction) so it does not accumulate.
+- **Two corrections made while implementing schema v0 (Sprint 0).** `external_id` is `NOT NULL`: PostgreSQL treats NULLs as distinct in a unique constraint, so a nullable column would have let a re-run insert duplicate rows, defeating the idempotency the ingestion job depends on; fetchers fall back to the canonical URL when a feed supplies no identifier. And `content_hash` is indexed but **not** unique, because a unique constraint contradicts `duplicate_of`: identical content legitimately arrives from two sources (a syndicated press release), and that must be recorded as a duplicate row pointing at the original, not rejected with an integrity error.
 - **Conflicts.** `claim.conflicts_with` is populated by a rule (same development, same metric name, values differ beyond tolerance, or contradictory claim types) plus reviewer action; conflicts create review tasks and are shown publicly as "sources disagree".
 - **Staleness.** Computed at read time from the latest confirmed assessment's `assessed_at` and the stage's window; no background job needed.
 - **Full text.** `content_text` is nullable and cleared after extraction for documents whose licence does not permit storage; a nightly job enforces this.

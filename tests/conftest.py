@@ -1,0 +1,82 @@
+"""Test fixtures.
+
+The suite runs against a real PostgreSQL with pgvector, and builds its schema by
+running the Alembic migrations rather than ``metadata.create_all``. That way the
+migrations themselves are what is under test: a model change that never made it
+into a migration fails here instead of in production.
+"""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _test_database_url() -> str | None:
+    return os.environ.get("RADAR_TEST_DATABASE_URL")
+
+
+@pytest.fixture(scope="session")
+def database_url() -> str:
+    url = _test_database_url()
+    if not url:
+        pytest.skip("RADAR_TEST_DATABASE_URL is not set; skipping database tests")
+    return url
+
+
+@pytest.fixture(scope="session")
+def engine(database_url: str) -> Iterator[Engine]:
+    """A migrated, empty database for the whole test session."""
+    eng = create_engine(database_url, pool_pre_ping=True, future=True)
+
+    cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(PROJECT_ROOT / "migrations"))
+    cfg.set_main_option("sqlalchemy.url", database_url)
+
+    # Start from a known-empty schema so a half-migrated database from an
+    # interrupted run cannot make the suite pass or fail spuriously.
+    command.downgrade(cfg, "base")
+    command.upgrade(cfg, "head")
+
+    yield eng
+    eng.dispose()
+
+
+@pytest.fixture
+def session(engine: Engine) -> Iterator[Session]:
+    """A session wrapped in a transaction that is always rolled back.
+
+    Tests therefore share one migrated database without leaking rows into one
+    another, and no test needs to clean up after itself.
+    """
+    connection = engine.connect()
+    transaction = connection.begin()
+    sess = Session(bind=connection, expire_on_commit=False, future=True)
+    try:
+        yield sess
+    finally:
+        sess.close()
+        # A test that asserts on an IntegrityError leaves the transaction already
+        # deassociated; rolling it back again only produces a warning.
+        if transaction.is_active:
+            transaction.rollback()
+        connection.close()
+
+
+@pytest.fixture
+def vector_available(engine: Engine) -> bool:
+    with engine.connect() as conn:
+        return bool(
+            conn.execute(
+                text("SELECT count(*) FROM pg_extension WHERE extname = 'vector'")
+            ).scalar()
+        )

@@ -1,0 +1,24 @@
+services:
+  db:
+    # Official pgvector image: PostgreSQL 16 with the vector extension preinstalled.
+    image: pgvector/pgvector:pg16
+    container_name: radar-db
+    environment:
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: radar
+      POSTGRES_DB: radar
+    ports:
+      # 5433 on the host so a locally installed PostgreSQL on 5432 is not shadowed.
+      - "5433:5432"
+    volumes:
+      - radar-pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radar -d radar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  radar-pgdata:

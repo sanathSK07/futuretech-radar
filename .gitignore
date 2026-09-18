@@ -29,11 +29,17 @@ npm-debug.log*
 data/
 *.db
 *.sqlite
-models/
 .cache/
+# Downloaded embedding-model weights, at the repo root only. An unanchored
+# "models/" pattern also matches src/radar/core/models/ and silently drops the
+# ORM package from commits.
+/models/
 
 # OS / editor
 .DS_Store
 .idea/
 .vscode/
 *.swp
+
+# Generated during the CI dependency audit.
+requirements.audit.txt
