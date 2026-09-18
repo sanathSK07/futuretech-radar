@@ -91,3 +91,17 @@ def test_settings_are_immutable() -> None:
 def test_rejects_an_unknown_environment() -> None:
     with pytest.raises(ValidationError):
         _settings(environment="staging")
+
+
+def test_the_api_key_is_not_printable() -> None:
+    """A settings object reaches logs and tracebacks; the key must not.
+
+    SecretStr is the difference between a stack trace that shows '**********'
+    and one that shows a live credential, which is how the database password
+    in this project first leaked.
+    """
+    settings = _settings(anthropic_api_key="sk-ant-secret-value")
+    assert "secret-value" not in repr(settings)
+    assert "secret-value" not in str(settings)
+    assert settings.anthropic_api_key is not None
+    assert settings.anthropic_api_key.get_secret_value() == "sk-ant-secret-value"

@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "ci", "production"]
@@ -46,6 +46,15 @@ class Settings(BaseSettings):
         description=(
             "Contact address advertised in the User-Agent of outbound fetches. "
             "Required before ingestion runs so source operators can reach us."
+        ),
+    )
+    anthropic_api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "API key for the triage and extraction stages. SecretStr so that a "
+            "settings object rendered into a log line or a traceback prints "
+            "'**********' instead of the key — which is exactly how the database "
+            "password ended up in a transcript."
         ),
     )
 
