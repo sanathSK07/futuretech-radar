@@ -8,15 +8,42 @@ than rejected, and full-text and vector search must actually work.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
-from radar.core.models import FetchRun, Source, SourceDocument
-from radar.core.types import DocumentLifecycle, FetchStatus, SourceKind, SourceTier
+from radar.core.models import (
+    AnalysisRun,
+    Claim,
+    Development,
+    DevelopmentOrganization,
+    Domain,
+    FetchRun,
+    Organization,
+    Source,
+    SourceDocument,
+    Technology,
+    TechnologyAlias,
+)
+from radar.core.types import (
+    AnalysisStage,
+    AnalysisStatus,
+    ClaimStatus,
+    ClaimType,
+    DateBasis,
+    DevelopmentKind,
+    DocumentLifecycle,
+    EntityStatus,
+    EpistemicLabel,
+    FetchStatus,
+    OrganizationRole,
+    SourceKind,
+    SourceTier,
+)
 
 pytestmark = pytest.mark.db
 
@@ -327,10 +354,316 @@ class TestEmbeddings:
 class TestMigrationState:
     def test_the_database_is_at_the_expected_revision(self, session: Session) -> None:
         revision = session.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert revision == "0001"
+        assert revision == "0002"
 
     def test_pgvector_is_installed(self, session: Session) -> None:
         installed = session.execute(
             text("SELECT count(*) FROM pg_extension WHERE extname = 'vector'")
         ).scalar_one()
         assert installed == 1
+
+
+def make_analysis_run(session: Session, **kwargs: object) -> AnalysisRun:
+    defaults: dict[str, object] = {
+        "stage": AnalysisStage.EXTRACT,
+        "model_id": "claude-haiku-4-5",
+        "prompt_version": "0f1e2d3",
+        "input_ids": [],
+        "status": AnalysisStatus.OK,
+    }
+    defaults.update(kwargs)
+    run = AnalysisRun(**defaults)
+    session.add(run)
+    session.flush()
+    return run
+
+
+def make_claim(
+    session: Session, document: SourceDocument, run: AnalysisRun, **kwargs: object
+) -> Claim:
+    defaults: dict[str, object] = {
+        "document_id": document.id,
+        "text": "A robot hand folded laundry autonomously in a live demonstration.",
+        "quote": "a robot hand folding laundry autonomously",
+        "quote_verified": True,
+        "claim_type": ClaimType.DEMONSTRATION,
+        "epistemic_label": EpistemicLabel.OBSERVED_FACT,
+        "analysis_run_id": run.id,
+    }
+    defaults.update(kwargs)
+    claim = Claim(**defaults)
+    session.add(claim)
+    session.flush()
+    return claim
+
+
+class TestClaimGrounding:
+    """The three grounding rules that the database itself enforces."""
+
+    def test_a_claim_round_trips_with_its_evidence(self, session: Session) -> None:
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        metrics = [{"name": "success_rate", "value": 92, "unit": "%"}]
+        claim = make_claim(session, document, run, metrics=metrics)
+
+        loaded = session.get(Claim, claim.id)
+        assert loaded is not None
+        assert loaded.status == ClaimStatus.PROPOSED
+        assert loaded.document.title == document.title
+        assert loaded.metrics == metrics
+        assert loaded.conflicts_with == []
+
+    def test_an_unverified_quote_cannot_be_stored(self, session: Session) -> None:
+        """The pipeline drops ungrounded claims; the database refuses them.
+
+        Two independent guards, because this is the rule that keeps invented
+        facts out. A backfill script that skips the pipeline still cannot write
+        one.
+        """
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        with pytest.raises(IntegrityError, match="quote_must_be_verified"):
+            make_claim(session, document, run, quote_verified=False)
+
+    def test_an_empty_quote_is_refused(self, session: Session) -> None:
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        with pytest.raises(IntegrityError, match="quote_not_empty"):
+            make_claim(session, document, run, quote="")
+
+    def test_a_date_without_a_basis_is_refused(self, session: Session) -> None:
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        with pytest.raises(IntegrityError, match="date_has_basis"):
+            make_claim(session, document, run, date_referenced=date(2026, 3, 1))
+
+    def test_a_date_with_a_basis_is_accepted(self, session: Session) -> None:
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        claim = make_claim(
+            session,
+            document,
+            run,
+            date_referenced=date(2026, 3, 1),
+            date_basis=DateBasis.DOCUMENT_METADATA,
+        )
+        assert claim.date_basis == DateBasis.DOCUMENT_METADATA
+
+    @pytest.mark.parametrize("claim_type", [ClaimType.EXPECTATION, ClaimType.EXPERT_FORECAST])
+    def test_a_forecast_cannot_be_labelled_an_observed_fact(
+        self, session: Session, claim_type: ClaimType
+    ) -> None:
+        """The rule the brief cared most about, enforced in the schema.
+
+        'Never present speculation as fact' is a prompt instruction anywhere
+        else. Here it is a constraint: a claim typed as a forecast and labelled
+        as observed fact cannot exist in this database.
+        """
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        with pytest.raises(IntegrityError, match="forecast_is_not_observed_fact"):
+            make_claim(
+                session,
+                document,
+                run,
+                claim_type=claim_type,
+                epistemic_label=EpistemicLabel.OBSERVED_FACT,
+            )
+
+    def test_a_forecast_with_the_right_label_is_accepted(self, session: Session) -> None:
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        claim = make_claim(
+            session,
+            document,
+            run,
+            claim_type=ClaimType.EXPECTATION,
+            epistemic_label=EpistemicLabel.SOURCE_EXPECTATION,
+            text="The company expects first power by 2027.",
+            quote="we expect first power by 2027",
+        )
+        assert claim.claim_type == ClaimType.EXPECTATION
+
+    def test_an_unknown_claim_type_is_refused(self, session: Session) -> None:
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        with pytest.raises(IntegrityError, match="claim_type_valid"):
+            make_claim(session, document, run, claim_type="breakthrough")  # type: ignore[arg-type]
+
+    def test_a_claim_cannot_outlive_its_analysis_run(self, session: Session) -> None:
+        """RESTRICT, not CASCADE: deleting the run would orphan the provenance.
+
+        A claim whose run is gone cannot answer "which model said this, from
+        which prompt", which is the whole point of storing it.
+        """
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        make_claim(session, document, run)
+        session.delete(run)
+        with pytest.raises(IntegrityError, match="fk_claim_analysis_run_id_analysis_run"):
+            session.flush()
+
+    def test_claims_are_full_text_searchable(self, session: Session) -> None:
+        source = make_source(session)
+        document = make_document(session, source)
+        run = make_analysis_run(session)
+        make_claim(session, document, run)
+        found = session.execute(
+            select(func.count())
+            .select_from(Claim)
+            .where(Claim.search_tsv.op("@@")(func.plainto_tsquery("english", "laundry")))
+        ).scalar_one()
+        assert found == 1
+
+
+class TestCuratedEntities:
+    def test_a_technology_needs_a_domain_and_a_scope_note(self, session: Session) -> None:
+        session.add(Domain(id="robotics", name="Robotics and humanoids"))
+        session.flush()
+        technology = Technology(
+            slug="general-purpose-manipulation",
+            name="General-purpose manipulation",
+            domain_id="robotics",
+            scope_note=(
+                "Autonomous manipulation in unstructured environments. Excludes teleoperation."
+            ),
+        )
+        session.add(technology)
+        session.flush()
+        assert technology.status == EntityStatus.PROPOSED
+        assert technology.featured is False
+
+    def test_a_merged_technology_must_say_what_it_merged_into(self, session: Session) -> None:
+        session.add(Domain(id="robotics", name="Robotics"))
+        session.flush()
+        session.add(
+            Technology(
+                slug="humanoids",
+                name="Humanoids",
+                domain_id="robotics",
+                scope_note="Bipedal general-purpose robots.",
+                status=EntityStatus.MERGED,
+            )
+        )
+        with pytest.raises(IntegrityError, match="merged_has_target"):
+            session.flush()
+
+    def test_an_alias_resolves_a_surface_form(self, session: Session) -> None:
+        session.add(Domain(id="quantum", name="Quantum computing"))
+        session.flush()
+        technology = Technology(
+            slug="below-threshold-error-correction",
+            name="Below-threshold error correction",
+            domain_id="quantum",
+            scope_note="Logical error rate below the physical error rate as the code scales.",
+        )
+        technology.aliases.append(TechnologyAlias(alias="surface code below threshold"))
+        session.add(technology)
+        session.flush()
+
+        resolved = session.execute(
+            select(TechnologyAlias.technology_id).where(
+                TechnologyAlias.alias == "surface code below threshold"
+            )
+        ).scalar_one()
+        assert resolved == technology.id
+
+    def test_an_organisation_may_have_no_ror_id(self, session: Session) -> None:
+        """Startups are absent from ROR and are still real developers."""
+        session.add_all(
+            [
+                Organization(name="A stealth robotics startup"),
+                Organization(name="Another one"),
+            ]
+        )
+        session.flush()  # two NULL ror_ids do not collide
+
+    def test_two_organisations_cannot_share_a_ror_id(self, session: Session) -> None:
+        session.add_all(
+            [
+                Organization(name="York University", ror_id="https://ror.org/05fq50484"),
+                Organization(name="York U", ror_id="https://ror.org/05fq50484"),
+            ]
+        )
+        with pytest.raises(IntegrityError, match="ror_id"):
+            session.flush()
+
+    def test_one_organisation_can_hold_two_roles_in_a_development(self, session: Session) -> None:
+        """A national lab that both funds and evaluates is not developer-controlled evidence.
+
+        Collapsing the two roles into one row would lose exactly the distinction
+        the maturity model uses to cap a stage at M3.
+        """
+        org = Organization(name="A national laboratory")
+        development = Development(
+            slug="fusion-net-gain-shot",
+            title="Net energy gain shot",
+            kind=DevelopmentKind.DEMONSTRATION,
+        )
+        session.add_all([org, development])
+        session.flush()
+        session.add_all(
+            [
+                DevelopmentOrganization(
+                    development_id=development.id,
+                    organization_id=org.id,
+                    role=OrganizationRole.FUNDER,
+                ),
+                DevelopmentOrganization(
+                    development_id=development.id,
+                    organization_id=org.id,
+                    role=OrganizationRole.EVALUATOR,
+                ),
+            ]
+        )
+        session.flush()
+        roles = session.execute(
+            select(func.count()).select_from(DevelopmentOrganization)
+        ).scalar_one()
+        assert roles == 2
+
+    def test_a_development_date_needs_a_basis(self, session: Session) -> None:
+        session.add(
+            Development(
+                slug="a-demo",
+                title="A demo",
+                kind=DevelopmentKind.DEMONSTRATION,
+                occurred_on=date(2026, 5, 1),
+            )
+        )
+        with pytest.raises(IntegrityError, match="occurred_has_basis"):
+            session.flush()
+
+
+class TestAnalysisRun:
+    def test_it_records_what_a_call_cost(self, session: Session) -> None:
+        run = make_analysis_run(
+            session,
+            tokens_in=12000,
+            tokens_out=800,
+            cost_usd=Decimal("0.014400"),
+            duration_ms=2310,
+            records_written=7,
+            ungrounded_claims=2,
+        )
+        loaded = session.get(AnalysisRun, run.id)
+        assert loaded is not None
+        assert loaded.cost_usd == Decimal("0.014400")
+        assert loaded.ungrounded_claims == 2
+
+    def test_a_negative_cost_is_refused(self, session: Session) -> None:
+        with pytest.raises(IntegrityError, match="cost_not_negative"):
+            make_analysis_run(session, cost_usd=Decimal("-1"))
+
+    def test_an_unknown_stage_is_refused(self, session: Session) -> None:
+        with pytest.raises(IntegrityError, match="stage_valid"):
+            make_analysis_run(session, stage="vibes")  # type: ignore[arg-type]

@@ -100,6 +100,56 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## Sprint 1 Task 1: schema v1, 2026-09-18
+
+Eleven tables added in migration `0002`: `domain`, `technology`,
+`technology_alias`, `organization`, `development`, `development_technology`,
+`development_organization`, `claim`, `analysis_run`, `review_task`,
+`review_action`. Verified from bare against PostgreSQL 16 with pgvector;
+`alembic check` reports no drift; 174 tests pass.
+
+Decisions worth recording:
+
+- **A stored claim is a verified claim.** `claim.quote_verified` carries a CHECK
+  that it is true, so an ungrounded claim cannot exist in the database at all —
+  not via the pipeline, not via a backfill script, not via a fixture. The
+  pipeline still drops them and counts them in `analysis_run.ungrounded_claims`;
+  the constraint is the second, independent guard on the rule that everything
+  else rests on.
+- **A forecast may not be labelled an observed fact.** A claim typed
+  `expectation` or `expert_forecast` with `epistemic_label = observed_fact` is
+  refused by the schema. "Never present speculation as fact" was a prompt
+  instruction everywhere else in the design; here it is a constraint.
+- **Claims carry only the three source-asserted epistemic labels.** Model
+  inference and curator scenario from docs/02 D.5 describe generated content and
+  are deliberately not storable on a claim, so generated text can never sit in
+  the same shape as quoted evidence.
+- **`review_task.target_id` is an untyped UUID** beside a `target_type`, rather
+  than six nullable foreign keys of which five are always null. The database
+  cannot enforce that the target exists; the alternative is worse to query and
+  worse to extend.
+- **`development_organization.role` is part of the primary key**, so one
+  organisation can be both funder and evaluator of the same event. That is the
+  distinction the maturity model uses to decide whether evidence is
+  developer-controlled, and collapsing it would lose it.
+- **Deleting an `analysis_run` is RESTRICTed** while claims reference it: a
+  claim whose run is gone cannot say which model and prompt produced it.
+
+### A CHECK constraint that silently passed
+
+`date_referenced IS NULL OR date_basis IN ('document_metadata', 'quoted_text')`
+does not do what it reads like. With `date_basis` NULL, the `IN` test evaluates
+to NULL, `FALSE OR NULL` is NULL, and **PostgreSQL treats a NULL CHECK result as
+satisfied**. The constraint accepted exactly the rows it existed to reject: a
+date with no stated basis, which is grounding rule 3 in docs/04.
+
+Two tests written alongside the constraint caught it immediately, which is the
+argument for writing the negative test rather than trusting the DDL to read
+correctly. Both constraints now spell out `IS NOT NULL AND ...`. The other
+nullable CHECKs in the schema (`tier_override`, `organization.kind`,
+`merged_into`) were re-read and are sound, because their null branch is the one
+that returns TRUE.
+
 ## CI had never passed, 2026-09-18
 
 Checking the run history after the DNS fix landed: runs 1, 2, 3 and 9 failed,
