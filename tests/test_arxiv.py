@@ -163,6 +163,9 @@ class TestArxivFetcher:
         fetcher = ArxivFetcher(client, category="cs.RO", page_size=50)
         parsed = urlsplit(fetcher.build_url(start=100))
         query = parse_qs(parsed.query)
+        assert parsed.scheme == "https", (
+            "http:// answers 301 and the redirect costs a rate-limited wait per page"
+        )
         assert parsed.hostname == "export.arxiv.org"
         assert query["search_query"] == ["cat:cs.RO"]
         assert query["start"] == ["100"]

@@ -26,7 +26,10 @@ from radar.pipeline.http import SafeHttpClient
 
 log = structlog.get_logger(__name__)
 
-ARXIV_API_URL = "http://export.arxiv.org/api/query"
+# HTTPS directly: the http:// form answers 301, and because the rate limiter
+# runs before every redirect hop, that redirect costs a wasted three seconds on
+# each page fetch. Confirmed against the live API on 2026-09-18.
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
 ATOM = "{http://www.w3.org/2005/Atom}"
 ARXIV_NS = "{http://arxiv.org/schemas/atom}"

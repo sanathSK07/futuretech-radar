@@ -41,6 +41,21 @@ Living tracker. Update at the end of every working session. Newest entries first
 
 - Q1 resolved: the repository is public. · Q2 name/domain · Q3 Anthropic-only · Q4 curator time commitment · Q5 demo date · Q6 seed list authorship · Q7 admin UI location · Q8 English-only. Defaults listed in `docs/08`.
 
+## Live verification, 2026-09-18
+
+`make smoke-arxiv` was run against the real arXiv API on SK's Mac. The parser
+matched the live feed exactly on first contact: ids and versions, cross-listed
+categories and primary category, authors, UTC-converted submission times,
+abstracts and canonical URLs. The fixtures built from arXiv's published API
+documentation were therefore accurate, and the fixture-based tests can be
+trusted until the API changes.
+
+One defect the live run exposed that no fixture could have: the API was being
+called over `http://`, which answers `301` to `https://`. Because the rate
+limiter runs before every redirect hop, that redirect cost a wasted three-second
+wait on each page fetch — minutes across eleven sources. `ARXIV_API_URL` now
+uses HTTPS directly, and a test asserts the scheme so it cannot regress.
+
 ## Decisions and corrections from Sprint 0 Task 3
 
 - **One rate limiter per host, not per source.** Eleven arXiv categories are eleven registry entries but one server. A limiter per source would have issued eleven requests every three seconds and breached arXiv's terms on the first run. `LimiterRegistry` keys on hostname and keeps the strictest interval any source asked for.
