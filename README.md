@@ -2,7 +2,7 @@
 
 **An evidence-graded intelligence platform for emerging technologies.** It tracks developments from universities, labs, companies and public research organisations, and answers one question a news feed cannot: *how real is this, and what is the evidence?*
 
-> Status: **Phase 1 (research & specification) complete · Phase 2 (MVP) in progress.** Nothing here runs yet. The documentation is the current deliverable; code lands sprint by sprint from 2026-09-22. See [`PROJECT-STATUS.md`](PROJECT-STATUS.md).
+> Status: **Phase 2 (MVP), Sprint 0 complete.** Ingestion runs: the schema, the source registry and the arXiv fetcher are in place and tested. Claim extraction and the web app land in Sprints 1–3. See [`PROJECT-STATUS.md`](PROJECT-STATUS.md).
 
 ## What makes it different
 
@@ -17,7 +17,7 @@ Forecasts are never presented as facts. Every dated statement carries one of fiv
 
 ## Scope of the MVP
 
-Six domains, ~30 curated technologies, daily batch ingestion from arXiv, bioRxiv, OpenAlex and ~40 official feeds, organisations resolved to ROR IDs.
+Six domains, ~30 curated technologies, daily batch ingestion from arXiv, bioRxiv, OpenAlex and ~40 official feeds, organisations resolved to ROR IDs. Sprint 0 ships the arXiv fetcher across all six domains; the rest follow.
 
 | Domain | Examples of tracked capabilities |
 | --- | --- |
@@ -73,7 +73,22 @@ Python 3.12 (FastAPI, SQLAlchemy 2, Pydantic v2), Next.js 15 / TypeScript, Postg
 
 ## Running it
 
-Not yet. Sprint 0 adds Docker Compose, the schema and the first ingestion job; this section will then read `make dev`.
+Requires Docker and [uv](https://docs.astral.sh/uv/).
+
+```bash
+make setup        # virtualenv, dependencies, .env from .env.example
+make db-up        # PostgreSQL 16 + pgvector on localhost:5433
+make migrate      # apply migrations
+make check        # lint, strict type check, tests
+
+make sources      # show the source registry
+make smoke-arxiv  # one live arXiv request, prints what was parsed, writes nothing
+make ingest       # ingest the last day from every active source
+```
+
+Set `RADAR_CRAWLER_CONTACT` in `.env` before ingesting: every outbound request
+carries it in the User-Agent so source operators can reach a human, and
+ingestion refuses to run without it.
 
 ## Corrections
 

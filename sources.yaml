@@ -1,0 +1,165 @@
+# FutureTech Radar — source registry.
+#
+# Adding a source is a judgement about evidence quality, so changes go through a
+# pull request. Every entry declares the tier that governs what its documents may
+# support (docs/02 section D.2) and the licence terms we operate under.
+#
+# tier: T1 primary/verifiable · T2 primary but self-interested
+#       T3 reputable secondary · T4 discovery only
+#
+# Sprint 0 implements the arxiv_category fetcher. Entries for other kinds are
+# declared but inactive until their fetcher lands in Sprint 1; the ingest command
+# skips inactive sources.
+
+sources:
+  # ---------------------------------------------------------------- AI / ML ---
+  - id: arxiv-cs-ai
+    name: arXiv cs.AI (Artificial Intelligence)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cs.AI }
+    domains: [ai]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  - id: arxiv-cs-lg
+    name: arXiv cs.LG (Machine Learning)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cs.LG }
+    domains: [ai]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  - id: arxiv-cs-cl
+    name: arXiv cs.CL (Computation and Language)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cs.CL }
+    domains: [ai]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  - id: arxiv-cs-ma
+    name: arXiv cs.MA (Multiagent Systems)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cs.MA }
+    domains: [ai]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  # --------------------------------------------------------------- Robotics ---
+  - id: arxiv-cs-ro
+    name: arXiv cs.RO (Robotics)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cs.RO }
+    domains: [robotics]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  # ---------------------------------------------------------------- Quantum ---
+  - id: arxiv-quant-ph
+    name: arXiv quant-ph (Quantum Physics)
+    kind: arxiv_category
+    tier: T1
+    params: { category: quant-ph }
+    domains: [quantum]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  # --------------------------------------------- Semiconductors / computing ---
+  - id: arxiv-cs-ar
+    name: arXiv cs.AR (Hardware Architecture)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cs.AR }
+    domains: [semiconductors]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  - id: arxiv-cs-et
+    name: arXiv cs.ET (Emerging Technologies)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cs.ET }
+    domains: [semiconductors]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  # ----------------------------------------------------------------- Energy ---
+  - id: arxiv-physics-plasm-ph
+    name: arXiv physics.plasm-ph (Plasma Physics)
+    kind: arxiv_category
+    tier: T1
+    params: { category: physics.plasm-ph }
+    domains: [energy]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  - id: arxiv-cond-mat-mtrl-sci
+    name: arXiv cond-mat.mtrl-sci (Materials Science)
+    kind: arxiv_category
+    tier: T1
+    params: { category: cond-mat.mtrl-sci }
+    domains: [energy, semiconductors]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+    note: >-
+      Broad category. Relevance filtering in Sprint 1 narrows this to batteries,
+      superconductors and semiconductor materials.
+
+  # ---------------------------------------------------------------- Biotech ---
+  - id: arxiv-q-bio-bm
+    name: arXiv q-bio.BM (Biomolecules)
+    kind: arxiv_category
+    tier: T1
+    params: { category: q-bio.BM }
+    domains: [biotech]
+    licence: "metadata CC0; e-prints link-only, never redistributed"
+    rate_limit: { requests_per_second: 0.333 }
+
+  # ------------------------------------------- Declared, fetcher not yet built --
+  # These land in Sprint 1. They are kept here so the registry documents the full
+  # intended coverage, and are inactive so ingest skips them rather than failing.
+
+  - id: biorxiv-synthetic-biology
+    name: bioRxiv — Synthetic Biology
+    kind: biorxiv
+    tier: T1
+    params: { category: synthetic biology }
+    domains: [biotech]
+    licence: "metadata only; preprints link-only"
+    active: false
+    note: bioRxiv fetcher arrives in Sprint 1.
+
+  - id: mit-news-research
+    name: MIT News — Research
+    kind: rss
+    tier: T2
+    params: { url: "https://news.mit.edu/rss/research" }
+    domains: [ai, robotics, energy, biotech, quantum, semiconductors]
+    licence: "excerpt and link only; no full-text republication"
+    active: false
+    note: RSS fetcher arrives in Sprint 1.
+
+  - id: deepmind-blog
+    name: Google DeepMind — Blog
+    kind: rss
+    tier: T2
+    params: { url: "https://deepmind.google/blog/rss.xml" }
+    domains: [ai]
+    licence: "excerpt and link only; no full-text republication"
+    active: false
+    note: RSS fetcher arrives in Sprint 1.
+
+  - id: doe-articles
+    name: US Department of Energy — Articles
+    kind: rss
+    tier: T2
+    params: { url: "https://www.energy.gov/articles.rss" }
+    domains: [energy]
+    licence: "US government work; excerpt and link"
+    active: false
+    note: RSS fetcher arrives in Sprint 1.

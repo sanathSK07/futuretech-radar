@@ -67,5 +67,17 @@ format: ## Reformat and autofix
 typecheck: ## Strict type checking
 	.venv/bin/mypy
 
+.PHONY: ingest
+ingest: ## Ingest the last day from every active source
+	.venv/bin/radar ingest --since 1d
+
+.PHONY: sources
+sources: ## Print the source registry
+	.venv/bin/radar sources list
+
+.PHONY: smoke-arxiv
+smoke-arxiv: ## Fetch a few live arXiv records and print them (writes nothing)
+	.venv/bin/radar smoke --source arxiv-cs-ro --count 3
+
 .PHONY: check
 check: lint typecheck test ## Everything CI runs

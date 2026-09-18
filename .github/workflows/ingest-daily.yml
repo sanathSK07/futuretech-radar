@@ -1,0 +1,72 @@
+name: Ingest (daily)
+
+on:
+  schedule:
+    # 07:10 UTC, a few minutes past the hour because GitHub delays scheduled
+    # runs most at :00. Public-repository schedules are disabled automatically
+    # after 60 days without repository activity (docs/decisions/ADR-0003).
+    - cron: "10 7 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Window to ingest (1d, 7d, 2w or an ISO date)"
+        default: "1d"
+      source:
+        description: "Optional single source id"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never let two ingestions overlap: they would poll the same sources at once
+  # and breach the per-host rate limit.
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RADAR_DATABASE_URL: ${{ secrets.RADAR_DATABASE_URL }}
+      RADAR_CRAWLER_CONTACT: ${{ secrets.RADAR_CRAWLER_CONTACT }}
+      RADAR_ENVIRONMENT: production
+      RADAR_LOG_LEVEL: info
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Check that the database is configured
+        id: preflight
+        run: |
+          if [ -z "${RADAR_DATABASE_URL}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::RADAR_DATABASE_URL is not set, so there is nowhere to ingest into."
+            echo "::notice::Add the repository secrets RADAR_DATABASE_URL and RADAR_CRAWLER_CONTACT to enable this job."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install uv
+        if: steps.preflight.outputs.configured == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        if: steps.preflight.outputs.configured == 'true'
+        run: |
+          uv venv --python 3.12
+          uv pip install -e "."
+
+      - name: Apply migrations
+        if: steps.preflight.outputs.configured == 'true'
+        run: .venv/bin/alembic upgrade head
+
+      - name: Ingest
+        if: steps.preflight.outputs.configured == 'true'
+        run: |
+          .venv/bin/radar ingest \
+            --since "${{ github.event.inputs.since || '1d' }}" \
+            ${{ github.event.inputs.source && format('--source {0}', github.event.inputs.source) || '' }}

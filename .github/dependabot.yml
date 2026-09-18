@@ -11,10 +11,12 @@ updates:
     groups:
       python-minor-and-patch:
         update-types: ["minor", "patch"]
-  - package-ecosystem: "npm"
-    directory: "/web"
-    schedule:
-      interval: "weekly"
-    groups:
-      npm-minor-and-patch:
-        update-types: ["minor", "patch"]
+  # The npm ecosystem is commented out until web/ exists in Sprint 3.
+  # Dependabot errors weekly on a directory with no manifest.
+  # - package-ecosystem: "npm"
+  #   directory: "/web"
+  #   schedule:
+  #     interval: "weekly"
+  #   groups:
+  #     npm-minor-and-patch:
+  #       update-types: ["minor", "patch"]

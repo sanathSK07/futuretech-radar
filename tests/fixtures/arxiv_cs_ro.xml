@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:arxiv="http://arxiv.org/schemas/atom"
+      xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <link href="http://arxiv.org/api/query?search_query%3Dcat%3Acs.RO" rel="self" type="application/atom+xml"/>
+  <title type="html">ArXiv Query: search_query=cat:cs.RO&amp;start=0&amp;max_results=3</title>
+  <id>http://arxiv.org/api/x1y2z3</id>
+  <updated>2026-09-18T00:00:00-04:00</updated>
+  <opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">4213</opensearch:totalResults>
+  <opensearch:startIndex xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">0</opensearch:startIndex>
+  <opensearch:itemsPerPage xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">3</opensearch:itemsPerPage>
+
+  <entry>
+    <id>http://arxiv.org/abs/2609.01234v2</id>
+    <updated>2026-09-17T18:21:05-04:00</updated>
+    <published>2026-09-16T14:02:11-04:00</published>
+    <title>Dexterous In-Hand Manipulation from Monocular Human
+  Demonstration</title>
+    <summary>  We present a system that learns in-hand reorientation from single-camera
+video of human hands. On a 16-DoF hand the policy reaches a 78% success rate
+across 40 unseen objects, compared with 51% for the prior state of the art.
+</summary>
+    <author>
+      <name>A. Researcher</name>
+      <arxiv:affiliation xmlns:arxiv="http://arxiv.org/schemas/atom">ETH Zurich</arxiv:affiliation>
+    </author>
+    <author>
+      <name>B. Coauthor</name>
+    </author>
+    <arxiv:doi xmlns:arxiv="http://arxiv.org/schemas/atom">10.1109/TRO.2026.1234567</arxiv:doi>
+    <link title="doi" href="http://dx.doi.org/10.1109/TRO.2026.1234567" rel="related"/>
+    <arxiv:comment xmlns:arxiv="http://arxiv.org/schemas/atom">8 pages, 6 figures. Accepted to ICRA 2027</arxiv:comment>
+    <arxiv:journal_ref xmlns:arxiv="http://arxiv.org/schemas/atom">IEEE T-RO 42 (2026) 118-129</arxiv:journal_ref>
+    <link href="http://arxiv.org/abs/2609.01234v2" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2609.01234v2" rel="related" type="application/pdf"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+
+  <entry>
+    <id>http://arxiv.org/abs/2609.01111v1</id>
+    <updated>2026-09-15T09:00:00-04:00</updated>
+    <published>2026-09-15T09:00:00-04:00</published>
+    <title>A Survey of Legged Locomotion on Deformable Terrain</title>
+    <summary>  We review control approaches for legged robots traversing sand, mud and snow.
+</summary>
+    <author>
+      <name>C. Author</name>
+    </author>
+    <link href="http://arxiv.org/abs/2609.01111v1" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2609.01111v1" rel="related" type="application/pdf"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+
+  <entry>
+    <id>http://arxiv.org/abs/2608.09999v1</id>
+    <updated>2026-08-30T11:30:00-04:00</updated>
+    <published>2026-08-30T11:30:00-04:00</published>
+    <title>Tactile Sensing with Compliant Membranes</title>
+    <summary>  An older submission, used to test the publication-date cutoff.
+</summary>
+    <author>
+      <name>D. Author</name>
+    </author>
+    <link href="http://arxiv.org/abs/2608.09999v1" rel="alternate" type="text/html"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>

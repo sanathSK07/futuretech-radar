@@ -9,8 +9,10 @@ into a migration fails here instead of in production.
 from __future__ import annotations
 
 import os
+import socket
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from alembic import command
@@ -80,3 +82,18 @@ def vector_available(engine: Engine) -> bool:
                 text("SELECT count(*) FROM pg_extension WHERE extname = 'vector'")
             ).scalar()
         )
+
+
+@pytest.fixture
+def public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve any hostname to a public address.
+
+    Tests that exercise fetchers should not depend on the network: real lookups
+    make the suite slow, and make it fail in sandboxes with no DNS. Tests that
+    are *about* address safety do their own resolution instead.
+    """
+
+    def fake_getaddrinfo(host: str, *args: Any, **kwargs: Any) -> list[Any]:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
