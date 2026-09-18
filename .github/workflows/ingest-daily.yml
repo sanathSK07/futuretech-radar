@@ -50,7 +50,7 @@ jobs:
 
       - name: Install uv
         if: steps.preflight.outputs.configured == 'true'
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
