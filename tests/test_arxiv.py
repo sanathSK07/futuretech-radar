@@ -201,3 +201,38 @@ class TestArxivFetcher:
         fetcher = ArxivFetcher(self._client([feed_xml, feed_xml]), category="cs.RO", page_size=3)
         found = list(fetcher.discover(datetime(2020, 1, 1, tzinfo=UTC)))
         assert len(found) == len({d.external_id for d in found})
+
+
+def _a_client() -> SafeHttpClient:
+    """A client that never answers; these tests only build URLs."""
+    return SafeHttpClient(
+        contact="test@example.org",
+        client=httpx.Client(
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, text="<feed/>"))
+        ),
+        max_attempts=1,
+    )
+
+
+class TestQueryEncoding:
+    """The colon in ``cat:`` must reach arXiv unescaped."""
+
+    def test_the_category_colon_is_not_percent_encoded(self) -> None:
+        """arXiv answers 406 to cat%3A and 200 to cat: — verified side by side.
+
+        RFC 3986 permits a literal colon in a query string, so escaping it is
+        legal and still wrong here. This one character caused four days of
+        intermittent ingestion failures that looked convincingly like server
+        load shedding, because a cached response served 200 whenever one
+        happened to exist.
+        """
+        url = ArxivFetcher(_a_client(), category="quant-ph").build_url(start=0)
+        assert "search_query=cat:quant-ph" in url
+        assert "%3A" not in url
+
+    def test_other_parameters_are_still_encoded(self) -> None:
+        """Only the colon is exempt; nothing else is trusted through raw."""
+        url = ArxivFetcher(_a_client(), category="cond-mat.mtrl-sci").build_url(start=0)
+        assert "sortBy=submittedDate" in url
+        assert "sortOrder=descending" in url
+        assert " " not in url

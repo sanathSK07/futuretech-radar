@@ -100,6 +100,48 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## The 406 was one escaped character, 2026-09-22
+
+`search_query=cat%3Aquant-ph` returns 406. `search_query=cat:quant-ph` returns
+200. Same client, same second, headers and protocol version held constant.
+`urlencode()` escapes the colon by default; RFC 3986 permits it literally in a
+query string, and arXiv's front end only accepts the literal form. Fixed with
+`safe=":"` and pinned by a test.
+
+Four days, four wrong diagnoses, in order:
+
+1. **Transient load shedding.** Stated after one run. Fitted the data, wasn't
+   tested.
+2. **A per-category property.** Stated after two runs, when three categories
+   repeated. An over-correction, again presented as a finding.
+3. **Back to load shedding**, after two categories recovered mid-retry on an
+   identical URL. That observation was real and the conclusion still wrong.
+4. **Headers, then protocol version.** Both eliminated by experiment.
+
+What made the wrong answer so convincing is worth recording, because the same
+trap is waiting inside the extraction pipeline. Identical requests genuinely did
+return 200 sometimes and 406 other times — almost certainly a cached response
+being served when one existed. Intermittency reads as a server-side condition,
+so the client stops being a suspect. Every category that "recovered" recovered
+on a cache hit, and every recovery made the load-shedding story stronger.
+
+The thing that actually moved it was a sequence of experiments each of which
+could only come out one way: curl vs our client, headers held constant, protocol
+held constant, then the URL itself. The first three ruled things out. The fourth
+found it. No amount of re-reading the logs would have.
+
+Two process notes now standing:
+
+- A diagnosis from one run is a hypothesis. Say "not enough evidence yet" and
+  name the experiment that would settle it.
+- When something intermittent involves a request built in code, diff the request
+  against a known-good one before theorising about the server. That diff took
+  ten minutes and was available on day one.
+
+The retry pass added yesterday stays: it recovered bioRxiv from a `ReadTimeout`
+in the same run, which is a genuine transient fault, and it costs nothing when
+nothing fails.
+
 ## arXiv's 406, settled by three runs, 2026-09-22
 
 Across three live runs every arXiv category that failed has also succeeded, and

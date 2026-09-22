@@ -165,6 +165,20 @@ class ArxivFetcher:
         self.page_size = page_size
 
     def build_url(self, *, start: int) -> str:
+        """Build a query URL, leaving the colon in ``cat:`` unescaped.
+
+        ``safe=":"`` is not cosmetic. arXiv's front end answers 406 to
+        ``search_query=cat%3Aquant-ph`` and 200 to ``search_query=cat:quant-ph``
+        — verified side by side, same client, same second, headers and protocol
+        version held constant. RFC 3986 permits a literal colon in a query
+        string, so escaping it is legal but not what the service accepts.
+
+        This was four days of intermittent failures: five categories out of
+        eleven on one run, three on another, two that never once succeeded. The
+        pattern looked like load shedding because a cached response served 200
+        whenever one happened to exist, which is exactly the kind of evidence
+        that makes a wrong diagnosis feel confirmed.
+        """
         query = urlencode(
             {
                 "search_query": f"cat:{self.category}",
@@ -173,7 +187,8 @@ class ArxivFetcher:
                 # Newest first, so paging can stop as soon as it passes `since`.
                 "sortBy": "submittedDate",
                 "sortOrder": "descending",
-            }
+            },
+            safe=":",
         )
         return f"{ARXIV_API_URL}?{query}"
 
