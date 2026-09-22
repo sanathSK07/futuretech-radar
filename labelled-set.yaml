@@ -1,0 +1,494 @@
+# FutureTech Radar - labelled evaluation set
+#
+# Fill this in by hand. It is the yardstick the extraction pipeline is measured
+# against, so nothing in it may come from a model - including from this one.
+#
+# For each document below:
+#
+#   relevant:  true if the document is about a technology this project tracks
+#              and reports something that happened. false for surveys, position
+#              papers, incremental benchmarks, and anything off-topic.
+#
+#   claims:    one entry per assertion worth storing. Leave empty if there are
+#              none, which is a normal and common outcome.
+#
+#              quote            copy and paste EXACTLY from the abstract above.
+#                               'radar label check' verifies it character for
+#                               character after normalising typography.
+#              text             the claim in one plain sentence, in your words.
+#              claim_type       measured_result | demonstration | deployment |
+#                               regulatory_event | funding_or_investment |
+#                               self_reported_claim | expectation |
+#                               expert_forecast | opinion
+#              epistemic_label  observed_fact | source_expectation |
+#                               expert_forecast
+#
+# A forecast (expectation, expert_forecast) can never be an observed_fact.
+#
+# Run 'radar label check <this file>' whenever you stop. It catches mistyped
+# quotes, which would otherwise penalise the model for being right.
+
+seed: 20260921
+generated_at: '2026-09-22'
+documents:
+- id: 9769fae8-9c9e-416f-b00b-0a196ded5b58
+  external_id: '2609.20373'
+  title: A Computational Method to Simulate Electrostatic Actuation in Polycatenated Architected
+    Materials
+  url: https://arxiv.org/abs/2609.20373
+  domains:
+  - energy
+  - semiconductors
+  abstract: A novel class of polycatenated architected materials (PAMs) has recently emerged,
+    exhibiting distinctive mechanical properties such as stress-strain hysteresis and a geometry-driven
+    transition between solid-like and fluid-like behavior. Although finite element models
+    exist for conventional PAMs, none currently account for electrostatic effects. Here, we
+    propose and qualitatively validate a computational framework to simulate the structure,
+    dynamics, and mechanical response of electrostatically charged PAMs. Our approach successfully
+    reproduces electrostatic actuation in close agreement with experiments, and reveals that
+    electrostatic charges enable a reversible fluid-to-solid transition while also providing
+    a means to estimate electrostatic stiffness. Notably, stiffness enhancements of up to
+    sevenfold are achieved upon charging. This work expands the design space of PAMs and offers
+    a predictive tool for actively controllable mechanical metamaterials.
+  relevant: null
+  claims: []
+- id: bf609b92-1d98-45fe-a457-9d9b464b4f7c
+  external_id: '2609.20379'
+  title: Predictive Structure to Thermal Conductivity Modeling Framework for BEOL Interconnect
+    Stacks in Advanced Technology Nodes Enabled by Extensive Layer Resolved Thermal Measurements
+  url: https://arxiv.org/abs/2609.20379
+  domains:
+  - energy
+  - semiconductors
+  abstract: The increasing structural complexity of BEOL interconnect stacks in advanced integrated
+    circuits demands a structure-aware thermal conductivity (\k{appa}) modeling framework.
+    However, generalizable models derived from layer-resolved thermal measurements that quantitatively
+    capture the dependence of \k{appa} on interconnect structures remain lacking, limiting
+    predictive thermal analysis. Here, we establish an experimentally derived, structure-aware
+    \k{appa} modeling framework enabled by time-domain thermoreflectance measurements with
+    ~100 nm depth resolution. Statistical analysis of a compiled dataset comprising over 40
+    experimentally measured layer-resolved \k{appa} values across diverse BEOL layers reveals
+    a generalizable empirical structure-to-\k{appa} relationship, enabling predictive modeling
+    based on interconnect structure. An intra-layer three-dimensional \k{appa} distribution
+    model based on effective medium theory and realistic layouts further resolves spatial
+    \k{appa} variations within practical interconnect layers. Together, these models establish
+    an experimentally derived, structure-aware \k{appa} modeling framework for predictive
+    and generalizable thermal analysis of advanced interconnect stacks and 3D ICs.
+  relevant: null
+  claims: []
+- id: ec88d0dd-7363-40ca-a97d-b0885ed128ed
+  external_id: '2609.20387'
+  title: Ultralow-Tensile Strain Enables Exciton Funneling and Energy Transfer to Boost MoSe2
+    Photoluminescence Quantum Yield
+  url: https://arxiv.org/abs/2609.20387
+  domains:
+  - energy
+  - semiconductors
+  abstract: Strain engineering is a powerful route for controlling the exciton dynamics in
+    van der Waals (vdW) heterostructures (HSs). The interlayer energy transfer (ET) process
+    is another key factor in controlling the photocarrier relaxation pathways in vdW HSs.
+    In this work, we combine these two processes to achieve an 8-fold enhancement to the relative
+    photoluminescence (PL) quantum yield (QY) in a HS formed from monolayers of ReS2 and MoSe2,
+    separated by a thin hBN interlayer, placed onto an hBN bubble. We achieve this enhancement
+    by applying only 0.1% biaxial tensile strain, which results in efficient exciton funneling
+    and an increased transition dipole moment. Our experimental data are supported by first-principles
+    density-functional theory and coherent transfer-matrix method calculations, ruling out
+    optical interference as the dominant origin of the enhancement. This work provides an
+    innovative route for enhancing the PL QY of vdW materials via interplay between the tensile
+    strain and the ET process.
+  relevant: null
+  claims: []
+- id: b3992d09-cf15-48cf-bf21-56f25cff2807
+  external_id: '2609.20471'
+  title: Disorder-induced modulation of the nonlinear Hall effect in Weyl semimetals
+  url: https://arxiv.org/abs/2609.20471
+  domains:
+  - energy
+  - semiconductors
+  abstract: We study the effects of impurity scattering on the nonlinear Hall response of
+    Weyl semimetals within the semiclassical Boltzmann approach. We derive the rectified and
+    second-harmonic conductivity tensors for a general momentum-dependent transport relaxation
+    time and evaluate this quantity microscopically for short-range, Gaussian, screened Coulomb,
+    and magnetic impurities. For scalar disorder, the relaxation time is isotropic and chirality
+    independent. The nonlinear Hall response is then determined by the anomalous velocity
+    associated with the Berry curvature, and a finite net response requires energetically
+    inequivalent Weyl nodes to avoid cancellation between opposite chiralities. Polarized
+    magnetic impurities lead to a qualitatively different behavior. We find that interference
+    between the first- and second-order Born amplitudes generates a helicity-dependent anisotropic
+    correction to the relaxation time. This anisotropy changes the tensor structure of the
+    nonlinear Hall conductivity and gives rise to a finite second-harmonic current for suitable
+    orientations of the electric field relative to the impurity polarization. For representative
+    parameters, however, the anisotropic contribution is several orders of magnitude smaller
+    than the dominant isotropic response. These results establish how the microscopic form
+    of impurity scattering enters the nonlinear Hall response of Weyl semimetals through the
+    transport relaxation time.
+  relevant: null
+  claims: []
+- id: db8597d8-b7d6-47ce-a26c-d767938cea31
+  external_id: '2609.20510'
+  title: Truncated automatic sparse differentiation for machine learning interatomic potentials
+  url: https://arxiv.org/abs/2609.20510
+  domains:
+  - energy
+  - semiconductors
+  abstract: 'Machine learning interatomic potentials (MLIPs) learn the mapping from atomic
+    positions to potential energy. The forces, the negative gradient of this energy, drive
+    molecular dynamics and are readily obtained using automatic differentiation. Higher-order
+    derivatives, most notably the Hessian, describe collective motion and allow the direct
+    prediction of experimental observables, but are considered computationally inaccessible
+    for large systems. We suggest a solution: in physical systems, interactions decay with
+    distance, and most MLIPs build on this locality through message passing up to a finite
+    receptive field. This implies both sparsity of higher-order derivatives and their decay
+    with distance. This structure can be exploited using automatic sparse differentiation
+    (ASD). We explain how to compute the sparsity pattern for MLIP derivatives and demonstrate
+    that, for multiple foundation MLIPs, ASD computes full Hessians of large porous materials
+    exactly, but with modest speedups at best. The larger gains come from truncated ASD: discarding
+    small, but nonzero, Hessian entries between distant atoms yields order-of-magnitude speedups
+    with negligible impact on predicted observables.'
+  relevant: null
+  claims: []
+- id: 429c876e-6245-4ea1-8c25-4bedb44be3cd
+  external_id: '2609.20616'
+  title: Magnon-Phonon Dynamics in Multidimensional Antiferromagnetic Oxides
+  url: https://arxiv.org/abs/2609.20616
+  domains:
+  - energy
+  - semiconductors
+  abstract: Antiferromagnetic oxides offer a compelling paradigm for magnonics. Combining
+    ab initio and spin Hamiltonian modeling, we map Cr2O3 from bulk to monolayer limits, verifying
+    stability via phonon spectra. Contrary to previously predicted half-metallic ferromagnetic
+    monolayer phases, we conclusively demonstrate that monolayer and bilayer configurations
+    preserve an antiferromagnetic semiconductor ground state despite systematic gap narrowing.
+    Intersecting magnon and phonon branches drive strong hybridization, establishing low-dimensional
+    Cr2O3 as an ideal platform for quantum spintronics.
+  relevant: null
+  claims: []
+- id: 710a6734-913b-4690-b168-d19cdcf18c54
+  external_id: '2609.20618'
+  title: Spin-Lattice Dynamics and Interactions in Magnonic Spinels
+  url: https://arxiv.org/abs/2609.20618
+  domains:
+  - energy
+  - semiconductors
+  abstract: Minimizing magnetic damping while understanding spin-lattice interactions remains
+    a key challenge for magnonics. We show site-specific Al/Li ordering in spinel ferrites
+    drives a ferrimagnetic insulating state, quenching the Fermi-level density of states.
+    \textit{Ab initio} calculations reveal collective acoustic modes alongside sub-lattice-selective
+    optical modes on tetrahedral and octahedral networks, providing a microscopic understanding
+    of substitution-driven spin dynamics. Crucially, the low-frequency magnon and acoustic
+    phonon modes intersect, driving strong hybridization for low-loss technologies.
+  relevant: null
+  claims: []
+- id: c2c1e451-985a-4c2b-99a3-a4b73745bb63
+  external_id: '2609.20481'
+  title: 'greCAPTCHA: Assessing Understanding as Evidence of Research Authorship Under Generative
+    AI'
+  url: https://arxiv.org/abs/2609.20481
+  domains:
+  - ai
+  abstract: Conferences, journals, funders, schools, and universities are struggling with
+    a surge of potentially AI-generated submissions from ostensibly human authors, who may
+    not have exercised sufficient human oversight for their manuscripts. In turn, institutions
+    evaluating submissions can no longer reliably credit expertise based solely on authors'
+    names on submitted work. To address this problem, we propose greCAPTCHA, a proctored assessment
+    approach that measures authors' understanding of research manuscripts via the construct
+    of capacity to verify, which we define as the knowledge and reasoning required to critically
+    assess the contents underlying one's contributions to a manuscript. greCAPTCHA generates
+    questions assessing multiple levels of understanding and provides an evaluative report
+    based on authors' responses. Using a prototype implementation, we conduct a user study
+    and semi-structured interviews with $31$ researchers to evaluate greCAPTCHA. Its automated
+    scores predict which papers were or were not authored by study participants with an AUC
+    of $0.90$. Participants reported positive overall experiences with the system and remarked
+    on the appropriate construct validity for author understanding, while also suggesting
+    important changes to be made before deployment. Our results provide initial evidence that
+    greCAPTCHA can assess manuscript-specific understanding under proctored conditions.
+  relevant: null
+  claims: []
+- id: f2e00f09-951f-42b9-9b88-4923e16903d5
+  external_id: '2609.20504'
+  title: Model-Agnostic and Language-Agnostic Voice Pipeline Improvement for the Agriculture
+    Domain
+  url: https://arxiv.org/abs/2609.20504
+  domains:
+  - ai
+  abstract: "FarmerChat is Digital Green's AI-powered agricultural advisory assistant for\
+    \ smallholder farmers, who access it in their own language through text, voice, or photographs.\
+    \ Voice is a critical channel for this population, yet field-recorded speech is challenging\
+    \ for general-purpose automatic speech recognition (ASR) because recordings frequently\
+    \ contain machinery noise, background media, competing speakers, and domain-specific agricultural\
+    \ vocabulary. These conditions disproportionately affect crop, pest, chemical, and quantity\
+    \ terms that carry the meaning of a farmer's query.\n  We present a modular, model-agnostic\
+    \ pipeline for improving ASR quality in FarmerChat without fine-tuning or replacing the\
+    \ underlying ASR model. The pipeline combines gated audio enhancement, speaker diarization\
+    \ and target-speaker selection, ASR, domain-aware correction using a weighted agricultural\
+    \ lexicon, and a quality gate for detecting unreliable transcripts. Only the diarization\
+    \ stage is fine-tuned; all other stages use off-the-shelf models behind common interfaces.\n\
+    \  We evaluate the pipeline on human-annotated FarmerChat recordings in Hindi, Telugu,\
+    \ and Odia using word error rate (WER) and a domain-weighted error rate that gives greater\
+    \ importance to agricultural terminology. The largest improvements occur on multi-speaker\
+    \ recordings, where target-speaker selection prevents competing speech from entering the\
+    \ transcript. Across the full corpus, the pipeline reduces WER by 16-23% relative on three\
+    \ cloud ASR models and by 5% on an on-device model. On multi-speaker recordings, the reductions\
+    \ are 32-42% for the cloud models and 16% for the on-device model. All reported reductions\
+    \ are statistically significant. These results show that targeted preprocessing, speaker\
+    \ selection, and domain-aware post-processing can substantially improve agricultural speech\
+    \ transcription while preserving the underlying ASR model."
+  relevant: null
+  claims: []
+- id: 35d2a9b1-8c97-4b66-ac07-eb671969ce09
+  external_id: '2609.20408'
+  title: 'Xeno-Interpretability: Investigating the Alien Minds of LLMs'
+  url: https://arxiv.org/abs/2609.20408
+  domains:
+  - ai
+  abstract: 'Large language models are usually interpreted through concepts that humans already
+    possess: truthfulness, refusal, deception, personality, harmfulness, and related categories.
+    This paper asks whether models may also represent and use distinctions for which no adequate
+    human concept exists. We call such internal structures xeno-representations, and their
+    study xeno-interpretability. We distinguish the human-interpretable semantic space from
+    the xeno-semantic space: the region of model-native representations for which no adequate
+    human conceptual counterpart is available. We show that the space of possible internal
+    distinctions in an LLM is substantially larger than the space available through finite
+    human descriptions. We then separate experimental identification from semantic interpretation:
+    an internal representation may be reproducibly located, geometrically characterized, causally
+    manipulated, and linked to downstream behaviour even when its semantic content cannot
+    be adequately expressed in human terms. On this basis, we sketch an empirical programme
+    to identify xeno-representations. We finally examine the implications for AI safety and
+    multi-agent systems, where model-native representations may propagate and stabilize across
+    interacting agents while remaining only partially visible through human-readable communication.
+    Xeno-interpretability therefore shifts the aim of interpretability from finding human
+    concepts inside models toward discovering and characterizing the representational structures
+    that are native to the models themselves and might affect their behaviour in unpredictable
+    ways.'
+  relevant: null
+  claims: []
+- id: 1c8b2d44-31a6-4077-896b-984ebb7a49dc
+  external_id: '2609.20812'
+  title: Quantifying Overclaiming Propensity in Frontier LLM Agents
+  url: https://arxiv.org/abs/2609.20812
+  domains:
+  - ai
+  abstract: Frontier coding agents are increasingly trusted to work autonomously for long
+    periods, yet an agent's final response is often the only account of that work a user sees.
+    We quantify the propensity of frontier agents to \emph{overclaim} task completion, a misrepresentation
+    that can mislead the user. An agent overclaims when its final response contradicts information
+    in its context. This definition requires no inference about intent and is independent
+    of task success. We introduce \emph{OverclaimBench}, an evaluation suite composed of five
+    file-review scenarios, transcript-based coverage measurements, and registered planted
+    defects. We evaluate eight proprietary frontier models in their own production command-line
+    interfaces, and four open-weight models under a single fixed harness on OverclaimBench
+    and find that 1) agents do not read all the files they were asked to review in 67.9\%
+    of runs; 2) among runs where not all files are read, agents are \emph{misleading} 80.4\%
+    of the time (59--96\% per model), either falsely claiming to have read all files or omitting
+    that coverage is incomplete; 3) requiring delegation to subagents increased reading coverage,
+    but among reviews that remained incomplete, a large majority were still misleading; and
+    4) agents that falsely claimed a complete review missed planted defects at about 1.8 times
+    the rate of agents that read every file, showing that claims of completion can conceal
+    substantive failures. Together, these results show that agents' final responses are not
+    reliable accounts of their actions.
+  relevant: null
+  claims: []
+- id: 25c311b7-b00c-4144-9543-aea02516d55f
+  external_id: '2609.20443'
+  title: 'Spatial-Semantic Uncertainty in VLM-Based Target Search: Balancing Exploration and
+    Identification'
+  url: https://arxiv.org/abs/2609.20443
+  domains:
+  - robotics
+  abstract: Robots searching for a target from a natural-language description must determine
+    not only where to search, but also which observed candidate is the desired target. These
+    decisions reflect two distinct sources of uncertainty - spatial uncertainty over candidate
+    locations and semantic uncertainty over target identity - that are often conflated in
+    VLM-based search systems. We introduce a spatial-semantic uncertainty formulation that
+    maintains separate beliefs over each component and integrates probabilistic VLM evidence
+    into a global target-identity posterior, including probability mass for undiscovered targets.
+    This decomposition allows an information-theoretic planner to independently value candidate
+    discovery and target disambiguation through spatial and semantic expected information
+    gain (EIG), providing an explicit mechanism for trading broader exploration against earlier
+    identification. We evaluate six VLM uncertainty-elicitation interfaces on 500 synthetic
+    targets and show that similar recognition accuracy can conceal substantial differences
+    in calibration and false confidence. In degraded-observation search-and-identify experiments,
+    EIG-based planners reach confident decisions in 75.0%-92.5% of trials, compared with 20.0%
+    for Random search, while different spatial-semantic weightings achieve comparable identification
+    accuracy once confidence is attained. Increasing semantic emphasis reduces unnecessary
+    exploration and VLM queries, demonstrating that explicitly planning over semantic uncertainty
+    can accelerate target resolution without sacrificing decision quality. These results highlight
+    the distinct roles of uncertainty representation and uncertainty-driven planning in embodied
+    VLM systems.
+  relevant: null
+  claims: []
+- id: bb06e066-578d-4222-848e-8aacb322f133
+  external_id: '2609.20605'
+  title: Bayesian Continuum Robot Dynamics and State Estimation
+  url: https://arxiv.org/abs/2609.20605
+  domains:
+  - robotics
+  abstract: Recent factor graph approaches to continuum robot state estimation have been successful
+    for quasi-static applications and spatiotemporal estimation using white-noise kinematic
+    motion priors. However, when inertial effects are significant, these approximations may
+    fail to capture the underlying physics, limiting accuracy during dynamic motions. In contrast,
+    our approach approximates the Cosserat rod dynamics of continuum robots. We write inertia
+    and damping as equivalent applied loads, so that the dynamic balance retains the algebraic
+    form of the static one from prior work with quasi-static robots. Without backbone observations,
+    the framework reduces to a stochastic forward simulation of the robot's motion. Given
+    observations, it jointly refines kinematic and dynamic states and infers external loads,
+    among other states. We validate the approach through simulation and experiments, demonstrating
+    stochastic forward simulation as well as state estimation on tendon-driven continuum robots.
+  relevant: null
+  claims: []
+- id: 732649ed-eada-41d6-a3b5-3b53c1727f64
+  external_id: '2609.20629'
+  title: RTK-Vision PPO for Autonomous Micro UAV Recovery on an Airborne Carrier
+  url: https://arxiv.org/abs/2609.20629
+  domains:
+  - robotics
+  abstract: Autonomous recovery of a micro unmanned aerial vehicle (UAV) onto a moving airborne
+    carrier enables reusable deploy-mission-recover operation, but couples long-range rendezvous,
+    close-range perception, carrier motion, aerodynamic interaction, and a discontinuous contact
+    event. This paper presents an RTK-vision-guided reinforcement-learning framework in which
+    a child UAV is physically transported by a larger carrier, takes off from the carrier
+    while airborne, executes an independent sortie, returns to the carrier's current position,
+    redocks, and subsequently descends with the carrier. Both vehicles carry RTK-GNSS, and
+    the carrier continuously shares its navigation state with the child. Near the recovery
+    deck, RTK remains active while a downward-facing camera with a fiducial marker detector
+    provides marker-relative alignment cues. A proximal policy optimization (PPO) policy governing
+    the terminal recovery phase is trained in a physics-based MuJoCo simulation environment
+    with explicit sensor noise models, an aerodynamic disturbance surrogate, and marker-latency
+    randomization, then transferred to hardware. PX4 retains low-level stabilization, and
+    a deterministic safety gate authorizes descent independently of the learned policy. The
+    PPO checkpoint achieves 99.55% success over 2,000 held-out randomized terminal episodes,
+    compared with 78.4% for a tuned PD baseline under identical conditions, with a median
+    planar terminal error of 6.62 cm. Across 14 outdoor trials, the full mission succeeds
+    in 13 trials (92.9%), spanning both near-region recovery and recovery after the carrier
+    translates away from the release point. The results demonstrate a complete autonomous
+    aerial deployment-and-recovery cycle rather than an isolated landing maneuver, establishing
+    a practical basis for reusable carrier-child operation in inspection, surveillance, and
+    mobile-logistics applications.
+  relevant: null
+  claims: []
+- id: 70e7164e-b3fa-4470-a562-1f56c51308aa
+  external_id: '2609.20649'
+  title: 'DexTouch-WM: Learning Action-Conditioned Tactile World Models from Human Touch for
+    Dexterous Robot Manipulation'
+  url: https://arxiv.org/abs/2609.20649
+  domains:
+  - robotics
+  abstract: Learning predictive models of contact-rich dexterous manipulation requires dense
+    tactile interaction, but such data are costly to scale on real robots and remain tied
+    to embodiment-specific sensors. We introduce DexTouch-WM, an action-conditioned world
+    model that learns from scalable human touch to jointly predict future RGB observations
+    and bilateral tactile dynamics. Our insight is that human and robot manipulation share
+    transferable contact dynamics when their tactile observations and action spaces are made
+    compatible. We deploy flexible piezoresistive arrays with a shared sensing layout on both
+    human and dexterous robot hands, and retarget human motion into the robot action space
+    so that human interaction can supervise the same dynamics model used for real-robot prediction.
+    DexTouch-WM couples a pretrained video expert with a lightweight tactile expert using
+    anatomy-aware tactile tokens and aligned action conditioning. In human-to-robot scaling
+    experiments, we keep five hours of real-robot supervision fixed while increasing human
+    interaction from 0 to 100 hours, and observe substantial improvements in held-out robot-domain
+    visual, geometric, and contact prediction despite disjoint human and robot task sets.
+    Beyond prediction, we evaluate the world models as surrogate environments for policy evaluation
+    and as generators of synthetic trajectories for real-robot policy learning, showing that
+    scalable human interaction provides a complementary data axis for learning dexterous robot
+    world models.
+  relevant: null
+  claims: []
+- id: 9527e77f-5589-46f8-98c4-94adddcc68f0
+  external_id: '2609.20559'
+  title: High-order correlations and ultrafast Wigner negativities in bright-squeezed-vacuum-driven
+    high-harmonic generation
+  url: https://arxiv.org/abs/2609.20559
+  domains:
+  - quantum
+  abstract: High-harmonic generation (HHG) is a prototypical strong-field process in which
+    intense light drives matter to emit radiation at integer multiples of the driving frequency.
+    Extending HHG into the quantum-optical regime offers new opportunities to probe and control
+    strongly nonlinear light-matter interactions using nonclassical states of light. Yet describing
+    this regime requires a fully quantum treatment of the correlated electron-photon dynamics,
+    which becomes computationally challenging for broadband, strongly squeezed fields. Here
+    we solve the quantum-electrodynamical dynamics of a two-level system driven by bright
+    squeezed vacuum in a converged multimode Hilbert space. Both the driving field and emitted
+    harmonics are fully quantized, with the light-matter interaction treated nonperturbatively.
+    This enables direct access to the multimode quantum state and its higher-order correlations
+    beyond semiclassical sampling or perturbative descriptions. We show that squeezed-vacuum
+    driving produces harmonic emission with qualitatively distinct second- and third-order
+    photon correlations compared with coherent excitation. Moreover, back-action from the
+    driven emitter strongly reshapes the incident squeezed field, generating pronounced Wigner-function
+    negativities that evolve on attosecond timescales. Our results establish a fully quantum
+    framework for broadband strong-field dynamics with squeezed light and provide a route
+    to predicting and interpreting quantum-HHG experiments and their extension to more complex
+    emitters.
+  relevant: null
+  claims: []
+- id: 5eb634c7-d645-47cc-b282-7f560caf8e29
+  external_id: '2609.20690'
+  title: A counterexample to the quantum Hedetniemi conjecture
+  url: https://arxiv.org/abs/2609.20690
+  domains:
+  - quantum
+  abstract: 'Godsil, Roberson, Šámal and Severini conjectured that the quantum chromatic number
+    of the categorical product of two graphs equals the minimum of the quantum chromatic numbers
+    of the factors. We disprove this conjecture: we construct explicit finite graphs $G,H$
+    with \[ χ(G\times H) \leq 1538 < 1539 = \min(χ_q(G),χ_q(H)).\]The graphs are obtained
+    from Zhu''s counterexample to Hedetniemi''s conjecture by using a base graph for which
+    the Lovász theta number of the complement, and not only the fractional chromatic number,
+    is large. The lower bound for the first factor is the theta bound. For the second factor
+    we adapt Zhu''s argument to projections that do not commute: the step that fixes the colors
+    of a clique is replaced by identities between operators. Both lower bounds hold for colorings
+    by projections in an arbitrary nonzero unital $C^*$-algebra. Hence the conjecture also
+    fails for the spatial, approximate, commuting-operator and $C^*$-algebraic variants of
+    the quantum chromatic number. We also give smaller counterexamples certified by exact
+    integer data. The graph constructions, the certificates and the counterexample statements
+    in the projective formulation are formalized in Lean~4.'
+  relevant: null
+  claims: []
+- id: 194cc3d2-24a6-406f-9718-7ccacd176af7
+  external_id: '2609.20693'
+  title: TetrisCNN for interpretable detection of phases of matter from experimental quantum
+    simulator data
+  url: https://arxiv.org/abs/2609.20693
+  domains:
+  - quantum
+  abstract: Detecting phases of matter in general relies on identifying the correct order
+    parameter - a task that remains notoriously difficult for unknown transitions and traditionally
+    is guided by physical intuition and educated guess. Neural networks have recently offered
+    an alternative route by locating phase transitions in known models without any a priori
+    physical knowledge. Yet these approaches remain black boxes and only identify phases without
+    elucidating their properties. Moreover, they often struggle when confronted with realistic,
+    noisy experimental data, which constitute the ultimate testbed for automated methods in
+    physics. Here, we bridge these perspectives by introducing TetrisCNN, a convolutional
+    architecture with parallel branches of differently shaped filters, reminiscent of Tetris
+    blocks, that learns sparse, interpretable latent representations directly in terms of
+    spin correlators. Applied to experimental snapshots of two-dimensional Ising and XY quantum
+    simulators measured in multiple bases, the network not only detects phase transitions
+    and crossovers but also expresses its latent representation and decision boundaries as
+    symbolic formulas built from experimentally measurable spin correlators. This framework
+    opens the way to integrating interpretable neural networks with quantum simulators to
+    uncover and understand new phases of matter.
+  relevant: null
+  claims: []
+- id: dc8c4c26-ed8b-4b4b-b3d0-77d4f745cea7
+  external_id: '2609.20698'
+  title: Multinegativity and single-letter formulas for asymptotic entanglement
+  url: https://arxiv.org/abs/2609.20698
+  domains:
+  - quantum
+  abstract: The study of entanglement inevitably leads to the concept of regularization, where
+    measures are evaluated on infinitely many copies of a state. Single-letter formulas try
+    to make these asymptotic entanglement quantities accessible through a calculation on one
+    copy of a state, but are rarely available. We introduce a decreasing hierarchy of computable
+    upper bounds on the asymptotic relative entropy of entanglement with respect to positive-partial-transpose
+    (PPT) states. The regularization of every fixed hierarchy level equals this asymptotic
+    quantity. Additivity at any level therefore yields a single-letter formula, even when
+    the usual one-copy relative entropy is nonadditive. We establish such additivity at the
+    first nontrivial level for two broad multiparameter families, both containing all Werner
+    states. The upper-bound construction also extends to sandwiched Renyi divergences. The
+    hierarchy motivates $k$-multinegative states, a generalization of binegative states and
+    the associated $k$-multinegativity, which gives explicit upper bounds on both the asymptotic
+    relative entropy and exact PPT entanglement cost. We construct states which are $k$-multinegative
+    at arbitrarily large depths $k$ that separate consecutive levels of the previously introduced
+    entanglement-cost hierarchy, disproving its conjectured finite collapse. These results
+    provide state-dependent single-letter formulas while identifying a limitation of universal
+    finite-level characterizations.
+  relevant: null
+  claims: []

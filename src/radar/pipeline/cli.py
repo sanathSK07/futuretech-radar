@@ -27,7 +27,9 @@ from radar.pipeline.labelling import (
     DEFAULT_PER_DOMAIN,
     DEFAULT_SEED,
     check_worksheet,
+    coverage,
     format_report,
+    missing_domains,
     parse_worksheet,
     render_worksheet,
     select_documents,
@@ -181,12 +183,19 @@ def cmd_label_export(args: argparse.Namespace) -> int:
             )
             return 1
         worksheet = render_worksheet(documents, seed=args.seed)
+        counts = coverage(documents)
+        absent = missing_domains(session, documents)
 
     out.write_text(worksheet, encoding="utf-8")
-    domains = sorted({d for doc in documents for d in (doc.source.domains or [])})
     print(f"wrote {len(documents)} documents to {out}")
-    print(f"domains covered: {', '.join(domains) or '(none recorded)'}")
-    print(f"seed {args.seed} - rerunning with the same seed gives the same documents")
+    for domain in sorted(counts):
+        print(f"  {domain:<18} {counts[domain]}")
+    if absent:
+        print(
+            f"\nno documents for: {', '.join(absent)}. Those domains have a source "
+            "declared but nothing ingested, so this set cannot speak for them."
+        )
+    print(f"\nseed {args.seed} - rerunning with the same seed gives the same documents")
     print("\nFill it in, then run: radar label check " + str(out))
     return 0
 

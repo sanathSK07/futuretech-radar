@@ -100,6 +100,39 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## The first real export exposed a flattering sampler, 2026-09-21
+
+`make label` against the live Neon corpus produced 19 documents and reported
+"domains covered: ai, energy, quantum, robotics, semiconductors". Reading the
+worksheet, the energy documents *were* the semiconductor documents: seven papers
+from `cond-mat.mtrl-sci`, a source tagged `[energy, semiconductors]`, filling
+both quotas with the same seven. The stratified sampler counted each document
+once per declared domain.
+
+Fixed: a document now counts towards the first domain its source declares, and
+the CLI prints the per-domain counts rather than a list of domain names. A
+sampler that flatters its own coverage is worse than one that reports a gap —
+the gap is actionable, the flattery is not.
+
+`missing_domains` now names domains that have an active source but contributed
+nothing, instead of leaving the silence to be read as coverage.
+
+Two findings from the same export, which matter more than the bug:
+
+- **arXiv cannot cover energy or biotech.** `physics.plasm-ph` returned nothing
+  and `q-bio.BM` is not producing documents; the energy capabilities in docs/05
+  (compact fusion, sodium-ion batteries, SMRs) are announced by DOE, national
+  labs and companies, not posted as preprints. bioRxiv and the RSS fetchers stop
+  being Sprint 1 nice-to-haves and become the precondition for a labelled set
+  that covers six domains.
+- **The sample is almost entirely method and theory papers** — modelling
+  frameworks, a counterexample, an interpretability programme. That is what
+  arXiv mostly is. A labelled set built only from it measures extraction against
+  theory papers and says little about the demonstrations and deployments the
+  maturity model runs on.
+
+Labelling is therefore deferred until the corpus covers what it claims to.
+
 ## Sprint 1 Task 3: the hand-labelled set, 2026-09-21
 
 `radar label export` writes a worksheet of documents to mark up by hand;

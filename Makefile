@@ -3,6 +3,12 @@
 
 SHELL := /bin/bash
 UV ?= uv
+
+# Run the CLI with src/ on the path explicitly. The editable install puts it
+# there too, via a .pth file, but that has now failed twice on a developer
+# machine with a ModuleNotFoundError that nothing in the venv explains. This
+# costs nothing and removes the dependency on it resolving.
+RADAR := PYTHONPATH=src .venv/bin/radar
 COMPOSE ?= docker compose -f infra/docker-compose.yml
 
 .DEFAULT_GOAL := help
@@ -72,19 +78,19 @@ typecheck: ## Strict type checking
 
 .PHONY: ingest
 ingest: ## Ingest the last day from every active source
-	.venv/bin/radar ingest --since 1d
+	$(RADAR) ingest --since 1d
 
 .PHONY: sources
 sources: ## Print the source registry
-	.venv/bin/radar sources list
+	$(RADAR) sources list
 
 .PHONY: label
 label: ## Write a worksheet of documents to label by hand
-	.venv/bin/radar label export
+	$(RADAR) label export
 
 .PHONY: label-check
 label-check: ## Verify the labelled set, including every quote
-	.venv/bin/radar label check labelled-set.yaml
+	$(RADAR) label check labelled-set.yaml
 
 .PHONY: secret
 secret: ## Set a secret in .env from a hidden prompt: make secret k=RADAR_ANTHROPIC_API_KEY
@@ -93,7 +99,7 @@ secret: ## Set a secret in .env from a hidden prompt: make secret k=RADAR_ANTHRO
 
 .PHONY: smoke-arxiv
 smoke-arxiv: ## Fetch a few live arXiv records and print them (writes nothing)
-	.venv/bin/radar smoke --source arxiv-cs-ro --count 3
+	$(RADAR) smoke --source arxiv-cs-ro --count 3
 
 .PHONY: check
 check: lint typecheck test ## Everything CI runs

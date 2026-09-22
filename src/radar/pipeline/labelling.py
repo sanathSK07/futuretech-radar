@@ -116,6 +116,16 @@ def select_documents(
     day than the quantum or energy ones, and an unstratified sample of twenty
     would be mostly robotics. The maturity model needs to be exercised across
     all six domains, which means the labelled set does too.
+
+    Each document counts towards exactly one domain, the first its source
+    declares. The first version let a document fill every domain its source was
+    tagged with, and the first real export showed what that costs: seven
+    documents from ``cond-mat.mtrl-sci``, tagged ``[energy, semiconductors]``,
+    filled both quotas with the same seven papers. The worksheet reported two
+    domains covered and contained one pile of condensed-matter physics — the
+    appearance of breadth with none of it. A sampler that flatters its own
+    coverage is worse than one that reports a gap, because the gap is
+    actionable and the flattery is not.
     """
     rows = session.execute(
         select(SourceDocument, Source.domains)
@@ -126,8 +136,8 @@ def select_documents(
 
     by_domain: dict[str, list[SourceDocument]] = {}
     for document, domains in rows:
-        for domain in domains or ["unassigned"]:
-            by_domain.setdefault(domain, []).append(document)
+        primary = (domains or ["unassigned"])[0]
+        by_domain.setdefault(primary, []).append(document)
 
     rng = random.Random(seed)  # noqa: S311 - sampling for review, not cryptography
     chosen: dict[UUID, SourceDocument] = {}
@@ -138,6 +148,31 @@ def select_documents(
             chosen.setdefault(document.id, document)
 
     return sorted(chosen.values(), key=lambda d: (d.source_id, d.external_id))
+
+
+def coverage(documents: Sequence[SourceDocument]) -> dict[str, int]:
+    """How many documents each domain actually contributed.
+
+    Counted on the primary domain, the same way the sample was drawn, so the
+    number printed to the person matches the number that was sampled.
+    """
+    counts: dict[str, int] = {}
+    for document in documents:
+        primary = (document.source.domains or ["unassigned"])[0]
+        counts[primary] = counts.get(primary, 0) + 1
+    return counts
+
+
+def missing_domains(session: Session, documents: Sequence[SourceDocument]) -> list[str]:
+    """Domains declared by an active source that contributed nothing.
+
+    Reported rather than passed over in silence: a domain with no documents
+    means a fetcher that has not been built or a source that returned nothing,
+    and either way the labelled set cannot speak for that domain.
+    """
+    declared = session.execute(select(Source.domains).where(Source.active.is_(True))).all()
+    all_domains = {domain for (domains,) in declared for domain in (domains or [])}
+    return sorted(all_domains - set(coverage(documents)))
 
 
 _INSTRUCTIONS = """\

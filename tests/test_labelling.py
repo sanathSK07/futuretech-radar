@@ -11,7 +11,9 @@ from tests.helpers import make_document, make_source
 from radar.core.types import ClaimType, EpistemicLabel, SourceKind, SourceTier
 from radar.pipeline.labelling import (
     check_worksheet,
+    coverage,
     format_report,
+    missing_domains,
     parse_worksheet,
     render_worksheet,
     select_documents,
@@ -59,6 +61,34 @@ class TestSampling:
         domains = {d for doc in documents for d in doc.source.domains}
         assert domains == {"robotics", "quantum", "energy"}
         assert len(documents) == 6
+
+    def test_one_document_cannot_fill_two_domain_quotas(self, session: Session) -> None:
+        """The bug the first real export exposed.
+
+        A source tagged [energy, semiconductors] used to put the same documents
+        into both piles, so the worksheet reported two domains covered and
+        contained one. The count a person reads has to be the count that was
+        sampled.
+        """
+        both = make_source(
+            session,
+            "arxiv-cond-mat-mtrl-sci",
+            domains=["energy", "semiconductors"],
+            name="arXiv cond-mat.mtrl-sci",
+        )
+        for index in range(8):
+            make_document(session, both, f"arXiv:2609.4{index:04d}", abstract=ABSTRACT)
+
+        documents = select_documents(session, per_domain=4)
+        assert len(documents) == 4
+        assert coverage(documents) == {"energy": 4}
+
+    def test_a_domain_with_no_documents_is_reported(self, session: Session) -> None:
+        """Silence about an empty domain reads as coverage."""
+        seed_corpus(session)
+        make_source(session, "biorxiv-synbio", domains=["biotech"], name="bioRxiv")
+        documents = select_documents(session, per_domain=2)
+        assert missing_domains(session, documents) == ["biotech"]
 
     def test_a_thin_domain_contributes_what_it_has(self, session: Session) -> None:
         seed_corpus(session)
