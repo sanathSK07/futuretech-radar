@@ -214,21 +214,24 @@ def _a_client() -> SafeHttpClient:
     )
 
 
-class TestQueryEncoding:
-    """The colon in ``cat:`` must reach arXiv unescaped."""
+class TestQueryStability:
+    """The URL is a cache key, so its shape must not drift."""
 
-    def test_the_category_colon_is_not_percent_encoded(self) -> None:
-        """arXiv answers 406 to cat%3A and 200 to cat: — verified side by side.
+    def test_the_query_url_shape_is_frozen(self) -> None:
+        """arXiv's edge answers 406 on a cache miss and 200 on a hit.
 
-        RFC 3986 permits a literal colon in a query string, so escaping it is
-        legal and still wrong here. This one character caused four days of
-        intermittent ingestion failures that looked convincingly like server
-        load shedding, because a cached response served 200 whenever one
-        happened to exist.
+        Verified from response headers: the 200 carried ``age: 178`` and
+        ``x-cache: MISS, HIT, HIT``, the 406 beside it ``x-cache: MISS, MISS``.
+        So a URL that has been asked for before is the one that works, and
+        changing the encoding asks for a cold key. The escaped colon is what
+        this project has always sent; this test exists to stop anyone
+        "tidying" it, including a future me who has just rediscovered RFC 3986.
         """
         url = ArxivFetcher(_a_client(), category="quant-ph").build_url(start=0)
-        assert "search_query=cat:quant-ph" in url
-        assert "%3A" not in url
+        assert url == (
+            "https://export.arxiv.org/api/query?search_query=cat%3Aquant-ph"
+            "&start=0&max_results=100&sortBy=submittedDate&sortOrder=descending"
+        )
 
     def test_other_parameters_are_still_encoded(self) -> None:
         """Only the colon is exempt; nothing else is trusted through raw."""

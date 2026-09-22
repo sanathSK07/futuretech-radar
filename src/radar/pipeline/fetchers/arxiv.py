@@ -165,19 +165,25 @@ class ArxivFetcher:
         self.page_size = page_size
 
     def build_url(self, *, start: int) -> str:
-        """Build a query URL, leaving the colon in ``cat:`` unescaped.
+        """Build a query URL, and never change its shape.
 
-        ``safe=":"`` is not cosmetic. arXiv's front end answers 406 to
-        ``search_query=cat%3Aquant-ph`` and 200 to ``search_query=cat:quant-ph``
-        — verified side by side, same client, same second, headers and protocol
-        version held constant. RFC 3986 permits a literal colon in a query
-        string, so escaping it is legal but not what the service accepts.
+        arXiv sits behind a cache that serves stored responses freely and
+        answers 406 to anything that would need an origin fetch. Verified from
+        the response headers: a 200 carries ``age: 178`` and
+        ``x-cache: MISS, HIT, HIT``; the 406 alongside it carries
+        ``x-cache: MISS, MISS`` and ``cache-control: private, no-store``. Cache
+        hit, data. Cache miss, refusal.
 
-        This was four days of intermittent failures: five categories out of
-        eleven on one run, three on another, two that never once succeeded. The
-        pattern looked like load shedding because a cached response served 200
-        whenever one happened to exist, which is exactly the kind of evidence
-        that makes a wrong diagnosis feel confirmed.
+        The practical consequence is that the URL is a cache key and stability
+        is worth more than elegance. ``urlencode`` escapes the colon in ``cat:``
+        and that is what this project has always sent, so those URLs are the
+        warm ones. Switching to the unescaped form — briefly done on the theory
+        that the escaping caused the 406 — asked for eleven cold URLs at once
+        and broke categories that had worked all week.
+
+        So: leave this alone. Not because the escaped colon is more correct
+        (RFC 3986 permits either), but because changing it throws away every
+        warm key the project has.
         """
         query = urlencode(
             {
@@ -187,8 +193,7 @@ class ArxivFetcher:
                 # Newest first, so paging can stop as soon as it passes `since`.
                 "sortBy": "submittedDate",
                 "sortOrder": "descending",
-            },
-            safe=":",
+            }
         )
         return f"{ARXIV_API_URL}?{query}"
 

@@ -100,47 +100,69 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
-## The 406 was one escaped character, 2026-09-22
+## The 406 is a cache miss, 2026-09-22
 
-`search_query=cat%3Aquant-ph` returns 406. `search_query=cat:quant-ph` returns
-200. Same client, same second, headers and protocol version held constant.
-`urlencode()` escapes the colon by default; RFC 3986 permits it literally in a
-query string, and arXiv's front end only accepts the literal form. Fixed with
-`safe=":"` and pinned by a test.
+Settled by reading response headers rather than by theorising:
 
-Four days, four wrong diagnoses, in order:
+```
+enc cs.RO -> 200   age: 178   x-cache: MISS, HIT, HIT   server: Google Frontend
+raw cs.RO -> 406   age: -     x-cache: MISS, MISS       cache-control: private, no-store
+```
 
-1. **Transient load shedding.** Stated after one run. Fitted the data, wasn't
-   tested.
-2. **A per-category property.** Stated after two runs, when three categories
-   repeated. An over-correction, again presented as a finding.
-3. **Back to load shedding**, after two categories recovered mid-retry on an
-   identical URL. That observation was real and the conclusion still wrong.
-4. **Headers, then protocol version.** Both eliminated by experiment.
+arXiv's edge serves cached responses freely and answers **406 to any request
+that would require an origin fetch**. The 200 was a 178-second-old cached copy
+with a Google Frontend hop behind it; the 406 never reached arXiv's application
+at all. Cache hit, data. Cache miss, refusal.
 
-What made the wrong answer so convincing is worth recording, because the same
-trap is waiting inside the extraction pipeline. Identical requests genuinely did
-return 200 sometimes and 406 other times — almost certainly a cached response
-being served when one existed. Intermittency reads as a server-side condition,
-so the client stops being a suspect. Every category that "recovered" recovered
-on a cache hit, and every recovery made the load-shedding story stronger.
+That explains every observation of the week at once: why identical requests
+alternate, why a category can fail for days and then work, why two recovered
+mid-retry, and why the failing set changes run to run. None of it was about
+categories, headers, protocol versions, payload size or escaping. It was about
+which URLs happened to be warm.
 
-The thing that actually moved it was a sequence of experiments each of which
-could only come out one way: curl vs our client, headers held constant, protocol
-held constant, then the URL itself. The first three ruled things out. The fourth
-found it. No amount of re-reading the logs would have.
+**The URL is a cache key.** `urlencode` escapes the colon in `cat:`, and that is
+what this project has always sent, so those keys are the warm ones. Changing to
+the unescaped form — done this morning on the theory that the escaping caused
+the 406 — requested eleven cold keys at once and broke categories that had
+worked all week. Reverted, with the URL shape now frozen by an equality test so
+nobody tidies it again.
 
-Two process notes now standing:
+### Five wrong diagnoses, and what they have in common
 
-- A diagnosis from one run is a hypothesis. Say "not enough evidence yet" and
-  name the experiment that would settle it.
-- When something intermittent involves a request built in code, diff the request
-  against a known-good one before theorising about the server. That diff took
-  ten minutes and was available on day one.
+1. Transient load shedding (one run).
+2. A per-category property (two runs).
+3. Load shedding again (three runs).
+4. Headers, then protocol version (eliminated by experiment).
+5. The escaped colon — with a 2×2 experiment, one sample per cell, that came
+   out 200/200/406/406 and looked conclusive.
 
-The retry pass added yesterday stays: it recovered bioRxiv from a `ReadTimeout`
-in the same run, which is a genuine transient fault, and it costs nothing when
-nothing fails.
+The fifth is the instructive one. A clean result from an underpowered test is
+still noise, and a test that cannot distinguish the hypothesis from chance is
+not evidence no matter how tidy its output. Repeating it with ten samples per
+cell inverted the result completely: raw 0/10, encoded 10/10 — the opposite of
+the "finding", and also not about encoding.
+
+What actually resolved it was looking at what the server said about itself.
+`x-cache` and `age` were in every response all week.
+
+### Standing rules from this
+
+- A result from n=1 is an anecdote. State the sample size before stating the
+  conclusion.
+- When a remote system behaves inconsistently, read its response headers before
+  forming any theory about why.
+- Intermittency manufactures evidence for whatever you already believe, because
+  every chance success reads as confirmation. Treat a confirming observation
+  from a flaky system as worth roughly nothing on its own.
+- The retry pass earns its place: it recovered three arXiv categories and
+  bioRxiv in the last run. Not as a fix for a misdiagnosed bug — as the correct
+  response to a cache that warms unpredictably.
+
+### Still open
+
+Paging is likely affected. `start=100` URLs are requested far less often than
+`start=0`, so they are colder and should 406 more. Every high-volume category
+day would then silently truncate at one page. Worth measuring before Sprint 2.
 
 ## arXiv's 406, settled by three runs, 2026-09-22
 
