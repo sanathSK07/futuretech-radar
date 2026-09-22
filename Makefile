@@ -78,6 +78,19 @@ ingest: ## Ingest the last day from every active source
 sources: ## Print the source registry
 	.venv/bin/radar sources list
 
+.PHONY: label
+label: ## Write a worksheet of documents to label by hand
+	.venv/bin/radar label export
+
+.PHONY: label-check
+label-check: ## Verify the labelled set, including every quote
+	.venv/bin/radar label check labelled-set.yaml
+
+.PHONY: secret
+secret: ## Set a secret in .env from a hidden prompt: make secret k=RADAR_ANTHROPIC_API_KEY
+	@test -n "$(k)" || (echo "usage: make secret k=RADAR_ANTHROPIC_API_KEY" && exit 1)
+	python3 scripts/set_secret.py $(k)
+
 .PHONY: smoke-arxiv
 smoke-arxiv: ## Fetch a few live arXiv records and print them (writes nothing)
 	.venv/bin/radar smoke --source arxiv-cs-ro --count 3

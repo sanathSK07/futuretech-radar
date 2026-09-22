@@ -90,6 +90,14 @@ make smoke-arxiv  # one live arXiv request, prints what was parsed, writes nothi
 make ingest       # ingest the last day from every active source
 ```
 
+Secrets go into `.env` through a hidden prompt, never through a terminal
+argument (which lands in shell history) and never through a chat, an issue or a
+screenshot:
+
+```bash
+make secret k=RADAR_ANTHROPIC_API_KEY
+```
+
 If the database password is ever exposed — an error dump prints connection
 parameters in the clear, so it happens — reset it in the provider's console and
 then run `python scripts/rotate_db_password.py`, which reads the new one from a
