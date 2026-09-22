@@ -32,7 +32,7 @@ class Source(Base, TimestampMixin):
             name="tier_valid",
         ),
         CheckConstraint(
-            "kind IN ('arxiv_category', 'biorxiv', 'rss', 'openalex', 'ror')",
+            "kind IN ('arxiv_category', 'arxiv_oai', 'biorxiv', 'rss', 'openalex', 'ror')",
             name="kind_valid",
         ),
     )

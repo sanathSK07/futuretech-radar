@@ -3,18 +3,19 @@
 Living tracker. Update at the end of every working session. Newest entries first within each list.
 
 **Phase:** 1 complete → Phase 2 (MVP) starts 2026-09-22
-**Last updated:** 2026-09-18
+**Last updated:** 2026-09-22
 
 ## Current task
 
-- **Verification, on SK's Mac** (the cloud workspace cannot reach arXiv — its egress allowlist blocks `export.arxiv.org`, so every fetcher test here runs against fixtures):
-  1. `make smoke-arxiv` — one live request, prints what the parser extracted, writes nothing. This is the check that the fixtures still match the real feed.
-  2. `make db-up && make migrate && make ingest` — the first real documents in the database.
-  3. If the smoke output looks wrong, paste it and the parser gets corrected in one pass.
-- Then Sprint 1 begins: triage and claim extraction.
+- **Verify the OAI-PMH harvest on SK's Mac** (this workspace's egress blocks `export.arxiv.org`, so every fetcher test here runs against fixtures):
+  1. `git pull && make check` — 295 tests, and migration `0003` widens the `source.kind` CHECK.
+  2. `make migrate` — `0003` must land before the registry syncs, or the `source.kind` CHECK rejects every arXiv row.
+  3. `make ingest` — it syncs the registry first, so the eleven arXiv sources switch to `kind: arxiv_oai` on the way in. Their ids are unchanged, so stored documents stay attached and nothing is re-inserted. Expect a much larger harvest than the Atom API returned, because OAI's `from` matches revisions as well as new submissions.
+- Then Sprint 1 continues: the Anthropic model client (Haiku triage, Sonnet extraction via Batch), prompts, and the eval script.
 
 ## Completed
 
+- 2026-09-22 — Sprint 1 · arXiv harvesting moved from the Atom search API to OAI-PMH (ADR-0007). `arxiv_oai` source kind, `ArxivOaiFetcher` with resumption-token paging, a repeat-token guard and a logged page ceiling; the eleven arXiv registry entries now carry setSpecs (`cs:cs:RO`, `physics:quant-ph`, `q-bio:q-bio:BM`) with their ids unchanged; migration `0003` widens the `source.kind` CHECK; `DEFAULT_MAX_BYTES` 5 MB → 32 MB. `make smoke-arxiv` now smokes the OAI transport, which leaves the Atom fetcher unreachable from the registry — listed as debt below. 295 tests; `ruff`, `mypy --strict` and `alembic check` clean.
 - 2026-09-18 — Sprint 0 · Task 3: ingestion. `sources.yaml` with 15 declared sources (11 active arXiv categories covering all six MVP domains; bioRxiv and RSS declared but inactive until their fetchers land in Sprint 1). `src/radar/pipeline/`: a source registry with Pydantic validation and database sync, a host-keyed rate limiter, an SSRF-guarded HTTP client, the `Fetcher` protocol, the arXiv Atom fetcher (defusedxml), ingest orchestration with `fetch_run` accounting, and the `radar` CLI (`sources list|sync`, `ingest`, `smoke`). Daily GitHub Actions ingest workflow. 130 tests; `ruff`, `mypy --strict` and `alembic check` clean.
 - 2026-09-18 — Repository pushed to `github.com/sanathSK07/futuretech-radar` (public).
 - 2026-09-18 — Sprint 0 · Task 2: core package and schema v0, verified end to end against a live PostgreSQL 16 + pgvector.
@@ -164,7 +165,15 @@ Paging is likely affected. `start=100` URLs are requested far less often than
 `start=0`, so they are colder and should 406 more. Every high-volume category
 day would then silently truncate at one page. Worth measuring before Sprint 2.
 
-## arXiv's 406, settled by three runs, 2026-09-22
+## arXiv's 406, settled by three runs, 2026-09-22 — SUPERSEDED
+
+> **This conclusion was wrong.** The 406 is a cold cache key, not a load-shedding
+> window; see "The 406 is a cache miss" above and ADR-0007. Kept rather than
+> rewritten, because the section is about not overclaiming from thin evidence and
+> then overclaims from three runs in its own closing line. The retry-after-settle
+> behaviour it describes is still in `ingest_all` and still helps, but for a
+> different reason than the one given here: a retry catches a URL some other
+> client has warmed in the meantime.
 
 Across three live runs every arXiv category that failed has also succeeded, and
 two recovered mid-retry on an identical URL with identical headers — `cs.MA` on
@@ -544,7 +553,9 @@ uses HTTPS directly, and a test asserts the scheme so it cannot regress.
 - No `pre-commit` hooks yet; `make check` covers the same ground manually.
 - mypy checks `packages = ["radar"]` only, so `tests/` is unchecked. Running it over the tests today reports five stale `# type: ignore` comments and nothing worse; widening the scope is cheap and should happen in Sprint 1.
 - A revised arXiv paper (v2) is skipped rather than updating the stored record: `ON CONFLICT DO NOTHING` is what guarantees idempotency, but it also means later metadata never lands. Revision handling belongs in Sprint 1, alongside triage.
-- Fetcher tests run against fixtures written from the published arXiv API documentation, not against recorded live responses, because this workspace's egress blocks `export.arxiv.org`. `make smoke-arxiv` is the compensating control and should be run whenever the parser changes.
+- Fetcher tests run against fixtures, not recorded live responses, because this workspace's egress blocks `export.arxiv.org` and `api.biorxiv.org`. The OAI-PMH fixtures were written from arXiv's published metadata schema and from a live `ListSets` response SK ran on his Mac; the first live `make ingest` on the new transport is the real check.
+- The Atom fetcher (`arxiv_category`) is no longer reachable from `sources.yaml` and is exercised only by its own tests. It is kept until the OAI harvest has run clean against the live API for a week, then deleted — along with its tests, its `SourceKind`, and `406` from `TRANSIENT_STATUSES`. If it is still here in October, that is rot, not caution.
+- `406` remains in `TRANSIENT_STATUSES` for the Atom fetcher's benefit. The retry is not principled — the status means a cold cache key, not a transient fault — and should be reconsidered when the Atom fetcher is finally deleted.
 - The daily ingest workflow is scheduled but inert until the `RADAR_DATABASE_URL` and `RADAR_CRAWLER_CONTACT` repository secrets exist; it reports a notice and exits cleanly rather than failing.
 
 ## Known bugs
@@ -569,7 +580,7 @@ uses HTTPS directly, and a test asserts the scheme so it cannot regress.
 
 ## Decisions log
 
-See `docs/decisions/`. ADR-0001 stack · ADR-0002 Postgres-only · ADR-0003 GitHub Actions scheduling · ADR-0004 claim as atomic unit · ADR-0005 no composite score / no auth in MVP · ADR-0006 human review gate.
+See `docs/decisions/`. ADR-0001 stack · ADR-0002 Postgres-only · ADR-0003 GitHub Actions scheduling · ADR-0004 claim as atomic unit · ADR-0005 no composite score / no auth in MVP · ADR-0006 human review gate · ADR-0007 arXiv harvest over OAI-PMH.
 
 ## Sprint self-review log
 

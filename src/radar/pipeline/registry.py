@@ -59,6 +59,11 @@ class SourceSpec(BaseModel):
         kind = info.data.get("kind")
         if kind == SourceKind.ARXIV_CATEGORY and not value.get("category"):
             raise ValueError("an arxiv_category source needs params.category, e.g. 'cs.RO'")
+        if kind == SourceKind.ARXIV_OAI and not value.get("set"):
+            raise ValueError(
+                "an arxiv_oai source needs params.set, a setSpec as ListSets reports it, "
+                "e.g. 'cs:cs:RO' — the dotted category name 'cs.RO' is not a setSpec"
+            )
         if kind == SourceKind.RSS and not value.get("url"):
             raise ValueError("an rss source needs params.url")
         return value

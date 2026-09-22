@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/">
+  <responseDate>2026-09-22T13:40:05Z</responseDate>
+  <ListRecords>
+    <record>
+      <header>
+        <identifier>oai:arXiv.org:2609.20900</identifier>
+        <datestamp>2026-09-22</datestamp>
+      </header>
+      <metadata>
+        <arXiv xmlns="http://arxiv.org/OAI/arXiv/">
+          <id>2609.20900</id>
+          <created>2026-09-21</created>
+          <authors><author><keyname>Chen</keyname><forenames>Wei</forenames></author></authors>
+          <title>A Paper On The Second Page</title>
+          <categories>cs.RO</categories>
+          <abstract>Only reachable through the resumption token.</abstract>
+        </arXiv>
+      </metadata>
+    </record>
+    <resumptionToken cursor="1000" completeListSize="3"></resumptionToken>
+  </ListRecords>
+</OAI-PMH>

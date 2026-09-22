@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from radar.core.models import Source
 from radar.core.types import SourceKind, SourceTier
+from radar.pipeline.http import SafeHttpClient
+from radar.pipeline.ingest import UnsupportedSourceKindError, build_fetcher
 from radar.pipeline.registry import Registry, SourceSpec, load_registry, sync_registry
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -81,13 +84,26 @@ class TestTheShippedRegistryFile:
         registry = load_registry(PROJECT_ROOT / "sources.yaml")
         assert len(registry.sources) > 10
 
-    def test_every_active_source_has_a_fetcher_that_exists(self) -> None:
+    def test_every_active_source_can_actually_be_built(self) -> None:
+        """Ask build_fetcher, rather than keeping a second list of kinds here.
+
+        The earlier version of this test held its own set of implemented kinds,
+        which meant shipping a fetcher required remembering to widen a literal
+        in a test file. This also catches a source whose params are wrong for
+        its kind — a missing params.set raises here, not at 3am in a cron run.
+        """
         registry = load_registry(PROJECT_ROOT / "sources.yaml")
-        implemented = {SourceKind.ARXIV_CATEGORY, SourceKind.RSS, SourceKind.BIORXIV}
-        unimplemented = [s.id for s in registry.active_sources if s.kind not in implemented]
-        assert unimplemented == [], (
-            f"these sources are active but have no fetcher yet: {unimplemented}. "
-            "Mark them active: false until their fetcher lands."
+        broken: list[str] = []
+        transport = httpx.MockTransport(lambda request: httpx.Response(200, text=""))
+        with SafeHttpClient(contact="a@b.org", client=httpx.Client(transport=transport)) as client:
+            for source in registry.active_sources:
+                try:
+                    build_fetcher(source, client)
+                except (UnsupportedSourceKindError, KeyError, ValueError) as error:
+                    broken.append(f"{source.id}: {error!r}")
+        assert broken == [], (
+            f"these sources are active but cannot be built: {broken}. "
+            "Mark a source active: false until its fetcher lands."
         )
 
     def test_the_six_mvp_domains_are_all_covered(self) -> None:

@@ -10,8 +10,11 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
@@ -47,6 +50,9 @@ from radar.core.types import (
 )
 
 pytestmark = pytest.mark.db
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestSource:
@@ -317,9 +323,19 @@ class TestEmbeddings:
 
 
 class TestMigrationState:
-    def test_the_database_is_at_the_expected_revision(self, session: Session) -> None:
+    def test_the_database_is_at_the_migration_head(self, session: Session) -> None:
+        """Compare against the migration directory, not a literal revision.
+
+        A hardcoded revision fails on every migration for the wrong reason, and
+        the fix is always to edit the literal — which trains you to edit it
+        without reading it. Asking the script directory for its head keeps the
+        real assertion: the fixture ran every migration there is.
+        """
+        config = Config(str(PROJECT_ROOT / "alembic.ini"))
+        config.set_main_option("script_location", str(PROJECT_ROOT / "migrations"))
+        head = ScriptDirectory.from_config(config).get_current_head()
         revision = session.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert revision == "0002"
+        assert revision == head
 
     def test_pgvector_is_installed(self, session: Session) -> None:
         installed = session.execute(

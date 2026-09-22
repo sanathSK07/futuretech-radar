@@ -28,6 +28,9 @@ class SourceKind(StrEnum):
     """Which fetcher implementation handles a source."""
 
     ARXIV_CATEGORY = "arxiv_category"
+    """The Atom search API. Kept for smoke tests; see ARXIV_OAI."""
+    ARXIV_OAI = "arxiv_oai"
+    """arXiv's OAI-PMH harvest interface, and the way bulk arXiv metadata arrives."""
     BIORXIV = "biorxiv"
     RSS = "rss"
     OPENALEX = "openalex"

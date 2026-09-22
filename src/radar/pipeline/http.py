@@ -30,17 +30,26 @@ USER_AGENT_TEMPLATE = (
 )
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
-DEFAULT_MAX_BYTES = 5 * 1024 * 1024
+DEFAULT_MAX_BYTES = 32 * 1024 * 1024
+"""A ceiling, not a budget: almost every response is kilobytes.
+
+Raised from 5 MB once harvesting moved to OAI-PMH. A single ListRecords page
+for the whole ``cs`` set measured 4,076,389 bytes on 2026-09-21 — under the
+old cap, but not by enough to be comfortable on a busy day.
+"""
 ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 TRANSIENT_STATUSES = frozenset({406, 408, 425, 429, 500, 502, 503, 504})
 """Statuses worth retrying rather than failing the source on.
 
-406 is here for a specific, verified reason. Content negotiation is not what
-arXiv means by it: export.arxiv.org answers 406 when shedding load, and the same
-request succeeds moments later. Treating it as a hard client error meant three
-categories failed every run while their neighbours, fetched seconds apart,
-returned 200.
+406 is here for a specific, verified reason, though not the one first written
+down. export.arxiv.org's search API sits behind an edge cache that serves stored
+responses and answers 406 to anything needing an origin fetch: a 200 carries
+``age`` and ``x-cache: MISS, HIT, HIT``, the 406 beside it carries
+``x-cache: MISS, MISS`` and ``cache-control: private, no-store``. Retrying still
+helps, because a URL another client has since warmed starts answering — which is
+what made this look like load shedding for a week. Harvesting now goes through
+OAI-PMH, which is not cached this way; see fetchers/arxiv_oai.py.
 """
 
 DEFAULT_MAX_ATTEMPTS = 6

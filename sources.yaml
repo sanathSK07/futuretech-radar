@@ -7,44 +7,50 @@
 # tier: T1 primary/verifiable · T2 primary but self-interested
 #       T3 reputable secondary · T4 discovery only
 #
-# Sprint 0 implements the arxiv_category fetcher. Entries for other kinds are
-# declared but inactive until their fetcher lands in Sprint 1; the ingest command
-# skips inactive sources.
+# arXiv metadata arrives over OAI-PMH (kind: arxiv_oai), not the Atom search API.
+# The search API sits behind an edge cache that answers 406 to any URL it has not
+# already stored, which a daily harvest asks for by definition; verified from the
+# x-cache and cache-control headers on 2026-09-21. The arxiv_category fetcher
+# remains in the codebase for smoke tests only. params.set is a setSpec exactly as
+# ListSets reports it — 'cs:cs:RO', not 'cs.RO'.
+#
+# Entries for kinds whose fetcher has not landed yet are declared but inactive;
+# the ingest command skips inactive sources.
 
 sources:
   # ---------------------------------------------------------------- AI / ML ---
   - id: arxiv-cs-ai
     name: arXiv cs.AI (Artificial Intelligence)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cs.AI }
+    params: { set: cs:cs:AI }
     domains: [ai]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
 
   - id: arxiv-cs-lg
     name: arXiv cs.LG (Machine Learning)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cs.LG }
+    params: { set: cs:cs:LG }
     domains: [ai]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
 
   - id: arxiv-cs-cl
     name: arXiv cs.CL (Computation and Language)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cs.CL }
+    params: { set: cs:cs:CL }
     domains: [ai]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
 
   - id: arxiv-cs-ma
     name: arXiv cs.MA (Multiagent Systems)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cs.MA }
+    params: { set: cs:cs:MA }
     domains: [ai]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
@@ -52,9 +58,9 @@ sources:
   # --------------------------------------------------------------- Robotics ---
   - id: arxiv-cs-ro
     name: arXiv cs.RO (Robotics)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cs.RO }
+    params: { set: cs:cs:RO }
     domains: [robotics]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
@@ -62,9 +68,9 @@ sources:
   # ---------------------------------------------------------------- Quantum ---
   - id: arxiv-quant-ph
     name: arXiv quant-ph (Quantum Physics)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: quant-ph }
+    params: { set: physics:quant-ph }
     domains: [quantum]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
@@ -72,18 +78,18 @@ sources:
   # --------------------------------------------- Semiconductors / computing ---
   - id: arxiv-cs-ar
     name: arXiv cs.AR (Hardware Architecture)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cs.AR }
+    params: { set: cs:cs:AR }
     domains: [semiconductors]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
 
   - id: arxiv-cs-et
     name: arXiv cs.ET (Emerging Technologies)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cs.ET }
+    params: { set: cs:cs:ET }
     domains: [semiconductors]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
@@ -91,18 +97,18 @@ sources:
   # ----------------------------------------------------------------- Energy ---
   - id: arxiv-physics-plasm-ph
     name: arXiv physics.plasm-ph (Plasma Physics)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: physics.plasm-ph }
+    params: { set: physics:physics:plasm-ph }
     domains: [energy]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
 
   - id: arxiv-cond-mat-mtrl-sci
     name: arXiv cond-mat.mtrl-sci (Materials Science)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: cond-mat.mtrl-sci }
+    params: { set: physics:cond-mat:mtrl-sci }
     domains: [energy, semiconductors]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
@@ -113,9 +119,9 @@ sources:
   # ---------------------------------------------------------------- Biotech ---
   - id: arxiv-q-bio-bm
     name: arXiv q-bio.BM (Biomolecules)
-    kind: arxiv_category
+    kind: arxiv_oai
     tier: T1
-    params: { category: q-bio.BM }
+    params: { set: q-bio:q-bio:BM }
     domains: [biotech]
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }

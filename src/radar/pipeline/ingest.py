@@ -15,6 +15,7 @@ from radar.core.models import FetchRun, SourceDocument
 from radar.core.settings import Settings
 from radar.core.types import FetchStatus, SourceKind
 from radar.pipeline.fetchers.arxiv import ARXIV_API_URL, ArxivFetcher
+from radar.pipeline.fetchers.arxiv_oai import ARXIV_OAI_URL, ArxivOaiFetcher
 from radar.pipeline.fetchers.base import Fetcher, RawDocument
 from radar.pipeline.fetchers.biorxiv import BIORXIV_API_URL, BiorxivFetcher
 from radar.pipeline.fetchers.rss import RssFetcher
@@ -33,6 +34,8 @@ def host_for(spec: SourceSpec) -> str:
     """The host a source's requests go to, used to share a rate limiter."""
     if spec.kind == SourceKind.ARXIV_CATEGORY:
         return str(urlsplit(ARXIV_API_URL).hostname)
+    if spec.kind == SourceKind.ARXIV_OAI:
+        return str(urlsplit(ARXIV_OAI_URL).hostname)
     if spec.kind == SourceKind.BIORXIV:
         return str(urlsplit(BIORXIV_API_URL).hostname)
     url = spec.params.get("url")
@@ -45,6 +48,8 @@ def build_fetcher(spec: SourceSpec, client: SafeHttpClient) -> Fetcher:
     """Return the fetcher for a source kind."""
     if spec.kind == SourceKind.ARXIV_CATEGORY:
         return ArxivFetcher(client, category=str(spec.params["category"]))
+    if spec.kind == SourceKind.ARXIV_OAI:
+        return ArxivOaiFetcher(client, set_spec=str(spec.params["set"]))
     if spec.kind == SourceKind.RSS:
         return RssFetcher(client, url=str(spec.params["url"]))
     if spec.kind == SourceKind.BIORXIV:

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd">
+  <responseDate>2026-09-22T13:40:00Z</responseDate>
+  <request verb="ListRecords" set="cs:cs:RO" metadataPrefix="arXiv">https://export.arxiv.org/oai2</request>
+  <ListRecords>
+    <record>
+      <header>
+        <identifier>oai:arXiv.org:2609.20822</identifier>
+        <datestamp>2026-09-22</datestamp>
+        <setSpec>cs</setSpec>
+        <setSpec>cs:cs:RO</setSpec>
+      </header>
+      <metadata>
+        <arXiv xmlns="http://arxiv.org/OAI/arXiv/">
+          <id>2609.20822</id>
+          <created>2026-09-21</created>
+          <authors>
+            <author><keyname>Okonkwo</keyname><forenames>Adaeze</forenames></author>
+            <author><keyname>Lindqvist</keyname><forenames>Sven</forenames></author>
+          </authors>
+          <title>Dexterous In-Hand Manipulation from Monocular Human Demonstration</title>
+          <categories>cs.RO cs.LG</categories>
+          <abstract>  We present a system that learns in-hand reorientation from single-camera
+  video of human hands. On a 16-DoF hand the policy achieved a 74% success rate
+  across 12 objects.
+          </abstract>
+          <license>http://creativecommons.org/licenses/by/4.0/</license>
+          <doi>10.1000/example.2609.20822</doi>
+        </arXiv>
+      </metadata>
+    </record>
+    <record>
+      <header>
+        <identifier>oai:arXiv.org:2609.20823</identifier>
+        <datestamp>2026-09-22</datestamp>
+        <setSpec>cs:cs:RO</setSpec>
+      </header>
+      <metadata>
+        <arXiv xmlns="http://arxiv.org/OAI/arXiv/">
+          <id>2609.20823</id>
+          <created>2026-09-20</created>
+          <updated>2026-09-21</updated>
+          <authors>
+            <author><keyname>Patel</keyname><forenames>Riya</forenames></author>
+          </authors>
+          <title>A Second Paper With
+  A Wrapped Title</title>
+          <categories>cs.RO</categories>
+          <abstract>A short abstract.</abstract>
+        </arXiv>
+      </metadata>
+    </record>
+    <record>
+      <header status="deleted">
+        <identifier>oai:arXiv.org:2609.00001</identifier>
+        <datestamp>2026-09-22</datestamp>
+      </header>
+    </record>
+    <resumptionToken cursor="0" completeListSize="3">3939516|1001</resumptionToken>
+  </ListRecords>
+</OAI-PMH>
