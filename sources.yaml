@@ -120,9 +120,12 @@ sources:
     licence: "metadata CC0; e-prints link-only, never redistributed"
     rate_limit: { requests_per_second: 0.333 }
 
-  # ------------------------------------------- Declared, fetcher not yet built --
-  # These land in Sprint 1. They are kept here so the registry documents the full
-  # intended coverage, and are inactive so ingest skips them rather than failing.
+  # --------------------------------------------------- Feeds and preprint APIs --
+  # Activated in Sprint 1. These carry the evidence arXiv structurally cannot:
+  # fusion milestones, battery deployments, regulatory decisions and product
+  # launches are announced on newsrooms, not posted as preprints. The first real
+  # labelling export made that concrete — energy and biotech had no documents at
+  # all, and every arXiv document in the sample was a method or theory paper.
 
   - id: biorxiv-synthetic-biology
     name: bioRxiv — Synthetic Biology
@@ -131,8 +134,10 @@ sources:
     params: { category: synthetic biology }
     domains: [biotech]
     licence: "metadata only; preprints link-only"
-    active: false
-    note: bioRxiv fetcher arrives in Sprint 1.
+    rate_limit: { requests_per_second: 1.0 }
+    note: >-
+      The API has no category parameter, so the category is filtered after the
+      fetch; a narrow category still costs a full walk of the window.
 
   - id: mit-news-research
     name: MIT News — Research
@@ -141,8 +146,7 @@ sources:
     params: { url: "https://news.mit.edu/rss/research" }
     domains: [ai, robotics, energy, biotech, quantum, semiconductors]
     licence: "excerpt and link only; no full-text republication"
-    active: false
-    note: RSS fetcher arrives in Sprint 1.
+    rate_limit: { requests_per_second: 0.5 }
 
   - id: deepmind-blog
     name: Google DeepMind — Blog
@@ -151,8 +155,7 @@ sources:
     params: { url: "https://deepmind.google/blog/rss.xml" }
     domains: [ai]
     licence: "excerpt and link only; no full-text republication"
-    active: false
-    note: RSS fetcher arrives in Sprint 1.
+    rate_limit: { requests_per_second: 0.5 }
 
   - id: doe-articles
     name: US Department of Energy — Articles
@@ -161,5 +164,29 @@ sources:
     params: { url: "https://www.energy.gov/articles.rss" }
     domains: [energy]
     licence: "US government work; excerpt and link"
-    active: false
-    note: RSS fetcher arrives in Sprint 1.
+    rate_limit: { requests_per_second: 0.5 }
+
+  - id: nrel-news
+    name: NREL — News Releases
+    kind: rss
+    tier: T2
+    params: { url: "https://www.nrel.gov/news/rss/press.xml" }
+    domains: [energy]
+    licence: "US government work; excerpt and link"
+    rate_limit: { requests_per_second: 0.5 }
+    note: >-
+      National Renewable Energy Laboratory. Batteries, grid storage and solar —
+      the energy capabilities docs/05 tracks, none of which reach arXiv.
+
+  - id: nrc-news
+    name: US Nuclear Regulatory Commission — News
+    kind: rss
+    tier: T1
+    params: { url: "https://www.nrc.gov/public-involve/listserver/rss/news-releases.xml" }
+    domains: [energy]
+    licence: "US government work; excerpt and link"
+    rate_limit: { requests_per_second: 0.5 }
+    note: >-
+      T1, not T2: a regulator's decision is a primary, verifiable record. This is
+      the only source in the registry that can supply a regulatory_event claim
+      for small modular reactors.

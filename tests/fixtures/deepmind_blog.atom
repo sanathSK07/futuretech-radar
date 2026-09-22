@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Research Blog</title>
+  <link rel="self" href="https://example-lab.org/blog/feed.atom"/>
+  <updated>2026-09-16T10:00:00Z</updated>
+  <entry>
+    <title>A Long-Horizon Agent Completes 40-Step Software Tasks</title>
+    <id>tag:example-lab.org,2026:blog/long-horizon-agent</id>
+    <link rel="alternate" href="https://example-lab.org/blog/long-horizon-agent"/>
+    <link rel="edit" href="https://example-lab.org/admin/1"/>
+    <published>2026-09-16T10:00:00Z</published>
+    <updated>2026-09-16T11:00:00Z</updated>
+    <author><name>Research Team</name></author>
+    <summary type="html">&lt;p&gt;Our agent completed 63% of 40-step tasks in an internal
+      evaluation, up from 31% six months ago.&lt;/p&gt;</summary>
+  </entry>
+  <entry>
+    <title>Older Post Outside The Window</title>
+    <id>tag:example-lab.org,2026:blog/older-post</id>
+    <link rel="alternate" href="https://example-lab.org/blog/older-post"/>
+    <published>2026-06-01T08:00:00Z</published>
+    <content type="html">Content, not summary, is where some feeds put the text.</content>
+  </entry>
+</feed>

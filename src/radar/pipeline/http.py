@@ -9,11 +9,13 @@ honest User-Agent that names the project and a contact address.
 from __future__ import annotations
 
 import ipaddress
+import json
 import random
 import socket
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
@@ -52,6 +54,10 @@ class UnsafeUrlError(ValueError):
 
 class ResponseTooLargeError(ValueError):
     """The response exceeded the byte cap."""
+
+
+class InvalidJsonError(ValueError):
+    """A source that should answer JSON answered something else."""
 
 
 class TransientHttpError(RuntimeError):
@@ -133,6 +139,21 @@ class FetchResult:
     status_code: int
     text: str
     content_type: str | None
+
+    def json(self) -> Any:
+        """Parse the body as JSON.
+
+        Raises InvalidJsonError naming the URL, because an API that starts
+        answering with an HTML error page otherwise produces a decode error
+        several frames away from anything that identifies the source.
+        """
+        try:
+            return json.loads(self.text)
+        except ValueError as exc:
+            preview = self.text[:120].replace("\n", " ")
+            raise InvalidJsonError(
+                f"{self.url} did not return JSON ({self.content_type}): {preview!r}"
+            ) from exc
 
 
 class SafeHttpClient:

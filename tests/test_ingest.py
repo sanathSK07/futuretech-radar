@@ -19,6 +19,7 @@ from radar.core.models import FetchRun, Source, SourceDocument
 from radar.core.settings import Settings
 from radar.core.types import FetchStatus, SourceKind, SourceTier
 from radar.pipeline.fetchers.base import RawDocument
+from radar.pipeline.fetchers.rss import RssFetcher
 from radar.pipeline.http import SafeHttpClient
 from radar.pipeline.ingest import (
     UnsupportedSourceKindError,
@@ -44,6 +45,18 @@ def _no_real_dns(public_dns: None) -> None:
 @pytest.fixture
 def feed_xml() -> str:
     return (FIXTURES / "arxiv_cs_ro.xml").read_text(encoding="utf-8")
+
+
+def rss_spec(source_id: str = "mit-news") -> SourceSpec:
+    return SourceSpec.model_validate(
+        {
+            "id": source_id,
+            "name": "MIT News",
+            "kind": SourceKind.RSS,
+            "tier": SourceTier.T2,
+            "params": {"url": "https://news.mit.edu/rss/research"},
+        }
+    )
 
 
 def arxiv_spec(source_id: str = "arxiv-cs-ro") -> SourceSpec:
@@ -108,18 +121,38 @@ class TestHostAndFetcherSelection:
         assert host_for(arxiv_spec("arxiv-cs-ro")) == "export.arxiv.org"
         assert host_for(arxiv_spec("arxiv-quant-ph")) == "export.arxiv.org"
 
-    def test_an_unbuilt_fetcher_fails_clearly(self) -> None:
-        rss = SourceSpec.model_validate(
+    def test_a_feed_source_maps_to_its_own_host(self) -> None:
+        """Each newsroom gets its own limiter; they are unrelated servers."""
+        assert host_for(rss_spec()) == "news.mit.edu"
+
+    def test_biorxiv_sources_share_one_host(self) -> None:
+        biorxiv = SourceSpec.model_validate(
             {
-                "id": "mit-news",
-                "name": "MIT News",
-                "kind": SourceKind.RSS,
-                "tier": SourceTier.T2,
-                "params": {"url": "https://news.mit.edu/rss/research"},
+                "id": "biorxiv-synbio",
+                "name": "bioRxiv synthetic biology",
+                "kind": SourceKind.BIORXIV,
+                "tier": SourceTier.T1,
+                "params": {"category": "synthetic biology"},
+            }
+        )
+        assert host_for(biorxiv) == "api.biorxiv.org"
+
+    def test_each_kind_builds_its_own_fetcher(self) -> None:
+        assert isinstance(build_fetcher(rss_spec(), client_serving("<rss/>")), RssFetcher)
+
+    def test_an_unbuilt_fetcher_fails_clearly(self) -> None:
+        """OpenAlex and ROR are declared in the registry and arrive later."""
+        openalex = SourceSpec.model_validate(
+            {
+                "id": "openalex-concepts",
+                "name": "OpenAlex",
+                "kind": SourceKind.OPENALEX,
+                "tier": SourceTier.T1,
+                "params": {"url": "https://api.openalex.org/works"},
             }
         )
         with pytest.raises(UnsupportedSourceKindError, match="later sprint"):
-            build_fetcher(rss, client_serving("<feed/>"))
+            build_fetcher(openalex, client_serving("{}"))
 
 
 @pytest.mark.db

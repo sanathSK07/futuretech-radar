@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Department of Energy — Articles</title>
+    <link>https://www.energy.gov/articles</link>
+    <description>News from the U.S. Department of Energy</description>
+    <item>
+      <title>National Lab Sustains Plasma for 12 Minutes in Compact Tokamak Test</title>
+      <link>https://www.energy.gov/articles/compact-tokamak-12-minute-plasma</link>
+      <guid isPermaLink="false">energy.gov/node/4481920</guid>
+      <pubDate>Tue, 15 Sep 2026 14:30:00 +0000</pubDate>
+      <dc:creator>Office of Science</dc:creator>
+      <description>&lt;p&gt;Researchers sustained a plasma discharge for &lt;strong&gt;12 minutes&lt;/strong&gt;
+        at an on-coil field of 20 T, using REBCO high-temperature superconducting tape.
+        The campaign concluded in March 2026.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Grid-Scale Sodium-Ion Battery Installed at Three Utility Sites</title>
+      <link>https://www.energy.gov/articles/sodium-ion-utility-deployment</link>
+      <guid isPermaLink="false">energy.gov/node/4481955</guid>
+      <pubDate>Mon, 07 Sep 2026 09:00:00 +0000</pubDate>
+      <description>A 20 MWh sodium-ion system is now operating at three utility sites in Texas.</description>
+    </item>
+    <item>
+      <title>An Entry With No Date At All</title>
+      <link>https://www.energy.gov/articles/undated</link>
+      <description>Publishers omit dates more often than anyone would like.</description>
+    </item>
+    <item>
+      <title>An Entry With No Link</title>
+      <description>This one cannot be stored, because there is nothing to cite.</description>
+    </item>
+  </channel>
+</rss>

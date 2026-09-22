@@ -1,0 +1,45 @@
+{
+  "messages": [
+    {"status": "ok", "interval": "2026-09-01:2026-09-18", "cursor": "0", "count": 3, "total": 3}
+  ],
+  "collection": [
+    {
+      "doi": "10.1101/2026.09.14.612345",
+      "title": "Cell-free synthesis of a 1.2 Mb bacterial genome",
+      "authors": "Okonkwo, A.; Patel, R.; Lindqvist, S.",
+      "author_corresponding": "Okonkwo, A.",
+      "author_corresponding_institution": "York University",
+      "date": "2026-09-14",
+      "version": "1",
+      "type": "new results",
+      "license": "cc_by",
+      "category": "synthetic biology",
+      "jatsxml": "https://www.biorxiv.org/content/early/2026/09/14/2026.09.14.612345.source.xml",
+      "abstract": "We report cell-free assembly of a 1.2 Mb genome with an error rate of 1 in 340 kb.",
+      "published": "NA",
+      "server": "biorxiv"
+    },
+    {
+      "doi": "10.1101/2026.09.12.611111",
+      "title": "A neuroscience preprint in another category",
+      "authors": "Smith, J.",
+      "date": "2026-09-12",
+      "version": "2",
+      "type": "new results",
+      "license": "cc_by_nc_nd",
+      "category": "neuroscience",
+      "abstract": "Not synthetic biology, and therefore not wanted by a filtered source.",
+      "server": "biorxiv"
+    },
+    {
+      "doi": "",
+      "title": "A record with no DOI",
+      "authors": "",
+      "date": "2026-09-10",
+      "version": "1",
+      "category": "synthetic biology",
+      "abstract": "Unusable: there is no stable identifier to key it on.",
+      "server": "biorxiv"
+    }
+  ]
+}

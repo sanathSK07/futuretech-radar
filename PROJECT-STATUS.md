@@ -100,6 +100,57 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## Sprint 1 Task 4: the sources arXiv cannot replace, 2026-09-21
+
+RSS/Atom and bioRxiv fetchers built and activated. 38 new tests, 264 pass. Six
+non-arXiv sources are now live: bioRxiv synthetic biology, MIT News, DeepMind's
+blog, DOE articles, NREL news releases and NRC news.
+
+This closes the gap the first labelling export exposed. Fusion milestones,
+battery deployments, regulatory decisions and product launches are announced on
+newsrooms and preprint servers outside arXiv; without these, two of the six MVP
+domains had no evidence and the corpus was entirely method and theory papers.
+
+Decisions:
+
+- **One fetcher reads both RSS 2.0 and Atom.** Official feeds are split roughly
+  evenly between them, and which dialect a newsroom publishes is not a fact the
+  registry should have to record. Dates are tried as RFC 822 then ISO 8601
+  regardless of dialect, because feeds in the wild use either.
+- **Summaries are stripped with the standard library's HTML parser, not a
+  regex.** A regex that deletes anything between angle brackets also eats the
+  rest of a sentence containing "error rate < 1 in 340 kb" — a comparison, not a
+  tag, and exactly the kind of sentence a claim is extracted from.
+- **Feed summaries are capped at 4,000 characters.** A few feeds put the whole
+  article in the description; storing it makes the licence position of a
+  self-interested publisher far less comfortable than storing an excerpt.
+- **An entry with no date is kept, not dropped.** A missing pubDate is usually a
+  publisher's omission rather than an old document, and dropping it silently
+  loses real announcements. It reaches triage with `published_at` NULL.
+- **An entry with no link is dropped.** There is nothing to cite, so there is
+  nothing this system can store.
+- **NRC is T1, not T2.** A regulator's decision is a primary verifiable record,
+  and it is the only source in the registry that can supply a
+  `regulatory_event` claim for small modular reactors.
+- **bioRxiv keys on the unversioned DOI**, which the server keeps across
+  versions, so a revision updates one record rather than creating a second.
+  Category filtering is client-side because the API has no category parameter —
+  a narrow category still costs a full walk of the window, and the alternative
+  was no biotech coverage.
+- **`FetchResult.json()` raises `InvalidJsonError` naming the URL.** An API that
+  starts answering with an HTML error page otherwise produces a decode error
+  several frames from anything identifying the source.
+
+Feeds carry a structural limitation worth stating: they have no date window and
+no paging, so a source that publishes more often than the job runs drops entries
+off the end of its own feed before they are ever seen. Daily ingestion is fine
+for these six; a busier source would need a different approach.
+
+Fixtures are written from the published feed specifications and the bioRxiv API
+documentation, because this workspace's egress blocks both hosts. `make
+smoke-arxiv` is the compensating live check for arXiv; the feed sources need an
+equivalent smoke run on SK's Mac before the first real ingest is trusted.
+
 ## The first real export exposed a flattering sampler, 2026-09-21
 
 `make label` against the live Neon corpus produced 19 documents and reported

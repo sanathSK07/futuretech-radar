@@ -83,7 +83,7 @@ class TestTheShippedRegistryFile:
 
     def test_every_active_source_has_a_fetcher_that_exists(self) -> None:
         registry = load_registry(PROJECT_ROOT / "sources.yaml")
-        implemented = {SourceKind.ARXIV_CATEGORY}
+        implemented = {SourceKind.ARXIV_CATEGORY, SourceKind.RSS, SourceKind.BIORXIV}
         unimplemented = [s.id for s in registry.active_sources if s.kind not in implemented]
         assert unimplemented == [], (
             f"these sources are active but have no fetcher yet: {unimplemented}. "
