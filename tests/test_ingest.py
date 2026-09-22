@@ -73,6 +73,15 @@ def arxiv_spec(source_id: str = "arxiv-cs-ro") -> SourceSpec:
     )
 
 
+def _test_settings() -> Settings:
+    """Settings good enough to drive ingestion in a test."""
+    return Settings(
+        database_url="postgresql+psycopg://u:p@localhost/radar",
+        crawler_contact="tests@example.org",
+        _env_file=None,  # type: ignore[call-arg]
+    )
+
+
 def client_serving(body: str, *, status: int = 200) -> SafeHttpClient:
     """A client that always answers the same way.
 
@@ -440,7 +449,88 @@ class TestIngestAll:
             self._settings(),
             since=datetime(2026, 8, 1, tzinfo=UTC),
             client_factory=factory,  # type: ignore[arg-type]
+            retry_failed=False,  # isolation is what is under test here, not recovery
         )
         statuses = {r.source_id: r.status for r in runs}
         assert statuses["arxiv-cs-ro"] == FetchStatus.ERROR
         assert statuses["arxiv-cs-lg"] == FetchStatus.OK
+
+
+@pytest.mark.db
+class TestRetryPass:
+    """arXiv sheds load in windows that outlast any per-request backoff."""
+
+    def test_a_source_that_fails_is_polled_again_and_can_recover(
+        self, session: Session, feed_xml: str
+    ) -> None:
+        """Across three live runs, every failing category also succeeded.
+
+        One recovered on the sixth attempt of an identical URL, which is what
+        says the status is a window rather than a property of the request. The
+        cheap fix is to come back after the other sources have been polled.
+        """
+        calls = {"n": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return httpx.Response(406, text="not acceptable")
+            return httpx.Response(200, text=feed_xml)
+
+        registry = Registry(sources=[arxiv_spec()])
+        sync_registry(session, registry)
+        waited: list[float] = []
+        runs = ingest_all(
+            session,
+            registry,
+            _test_settings(),
+            since=datetime(2026, 9, 1, tzinfo=UTC),
+            client_factory=lambda limiter: SafeHttpClient(
+                contact="a@b.org",
+                client=httpx.Client(transport=httpx.MockTransport(handler)),
+                max_attempts=1,
+            ),
+            settle_seconds=42.0,
+            sleep=waited.append,
+        )
+
+        assert [run.status for run in runs] == [FetchStatus.ERROR, FetchStatus.OK]
+        assert waited == [42.0], "the retry pass must wait for the window to close"
+        assert runs[-1].new_count > 0
+
+    def test_a_successful_run_is_not_polled_twice(self, session: Session, feed_xml: str) -> None:
+        """The pause costs a minute; a run with nothing to retry must not pay it."""
+        waited: list[float] = []
+        registry = Registry(sources=[arxiv_spec()])
+        sync_registry(session, registry)
+        runs = ingest_all(
+            session,
+            registry,
+            _test_settings(),
+            since=datetime(2026, 9, 1, tzinfo=UTC),
+            client_factory=lambda limiter: client_serving(feed_xml),
+            sleep=waited.append,
+        )
+        assert len(runs) == 1
+        assert waited == []
+
+    def test_the_retry_pass_can_be_turned_off(self, session: Session, feed_xml: str) -> None:
+        """A developer debugging one source does not want to wait a minute."""
+        registry = Registry(sources=[arxiv_spec()])
+        sync_registry(session, registry)
+        runs = ingest_all(
+            session,
+            registry,
+            _test_settings(),
+            since=datetime(2026, 9, 1, tzinfo=UTC),
+            client_factory=lambda limiter: SafeHttpClient(
+                contact="a@b.org",
+                client=httpx.Client(
+                    transport=httpx.MockTransport(lambda r: httpx.Response(406, text="no"))
+                ),
+                max_attempts=1,
+            ),
+            retry_failed=False,
+            sleep=lambda seconds: pytest.fail("no pause should happen"),
+        )
+        assert [run.status for run in runs] == [FetchStatus.ERROR]

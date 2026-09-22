@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
@@ -157,6 +158,16 @@ def ingest_source(
 ClientFactory = Callable[[MinIntervalLimiter], SafeHttpClient]
 
 
+DEFAULT_SETTLE_SECONDS = 60.0
+"""How long to wait before retrying the sources that failed.
+
+Three consecutive live runs showed arXiv's 406 shedding windows outlasting a
+six-attempt backoff inside a single source, while the same request succeeded
+minutes later in the next run. Waiting once, after every other source has been
+polled, costs a minute and recovers what patience inside the source could not.
+"""
+
+
 def ingest_all(
     session: Session,
     registry: Registry,
@@ -166,8 +177,20 @@ def ingest_all(
     only: str | None = None,
     limit: int | None = None,
     client_factory: ClientFactory | None = None,
+    retry_failed: bool = True,
+    settle_seconds: float = DEFAULT_SETTLE_SECONDS,
+    sleep: Callable[[float], None] | None = None,
 ) -> list[FetchRun]:
     """Poll every active source (or one named source) and return the runs.
+
+    Sources that failed are polled once more at the end, after a pause. This is
+    not belt-and-braces: arXiv sheds load in windows that outlast any sensible
+    per-request backoff, and the evidence is direct — across three live runs,
+    every category that failed has also succeeded, one of them on the sixth
+    attempt of the same URL with identical headers. Retrying inside the source
+    only lengthens the wait while the window is still open; coming back after
+    the other sixteen sources have been polled costs nothing extra and finds it
+    closed.
 
     ``client_factory`` exists so tests can drive this with a mock transport;
     production leaves it unset and gets a real rate-limited client.
@@ -177,25 +200,52 @@ def ingest_all(
         def client_factory(limiter: MinIntervalLimiter) -> SafeHttpClient:
             return SafeHttpClient(contact=settings.crawler_contact, limiter=limiter)
 
+    wait = sleep or time.sleep
     specs = [registry.get(only)] if only else registry.active_sources
     limiters = LimiterRegistry()
-    runs: list[FetchRun] = []
 
-    for spec in specs:
-        if not spec.active and only is None:
-            continue
+    def poll(spec: SourceSpec) -> FetchRun | None:
         try:
             host = host_for(spec)
         except UnsupportedSourceKindError:
             log.warning("skipping_source_without_host", source_id=spec.id)
-            continue
-
+            return None
         limiter = limiters.for_host(host, spec.rate_limit.min_interval_seconds)
         with client_factory(limiter) as client:
             run = ingest_source(session, spec, client, since=since, limit=limit)
-        runs.append(run)
         # Commit per source so a later failure cannot discard earlier work.
         session.commit()
+        return run
+
+    runs: list[FetchRun] = []
+    by_source: dict[str, FetchRun] = {}
+    for spec in specs:
+        if not spec.active and only is None:
+            continue
+        run = poll(spec)
+        if run is not None:
+            runs.append(run)
+            by_source[spec.id] = run
+
+    failed = [
+        spec
+        for spec in specs
+        if by_source.get(spec.id) is not None and by_source[spec.id].status == FetchStatus.ERROR
+    ]
+    if retry_failed and failed:
+        log.info(
+            "retrying_failed_sources",
+            count=len(failed),
+            settle_seconds=settle_seconds,
+            source_ids=[spec.id for spec in failed],
+        )
+        wait(settle_seconds)
+        for spec in failed:
+            run = poll(spec)
+            if run is not None:
+                runs.append(run)
+                if run.status == FetchStatus.OK:
+                    log.info("source_recovered_on_retry", source_id=spec.id)
 
     return runs
 

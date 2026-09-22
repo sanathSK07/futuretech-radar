@@ -100,6 +100,38 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## arXiv's 406, settled by three runs, 2026-09-22
+
+Across three live runs every arXiv category that failed has also succeeded, and
+two recovered mid-retry on an identical URL with identical headers — `cs.MA` on
+the sixth attempt, `q-bio.BM` on the fourth. `cond-mat.mtrl-sci` failed the
+first two runs and succeeded first try on the third. That settles it: the 406 is
+a load-shedding window, not a property of a category or a request.
+
+Worth recording as a reasoning failure, not just a bug. The first run's evidence
+was read as "transient" with more confidence than one run supports. The second
+run showed three repeat failures and that was read as "there is a per-category
+component" — an over-correction on two data points, stated as a finding when it
+should have been stated as a hypothesis needing a third run. The honest position
+after run two was "not enough evidence yet", and saying so costs nothing.
+
+The fix follows from the shape of the problem rather than from more patience.
+Backoff inside a source only lengthens the wait while the window is still open,
+and six attempts already spend two minutes. `ingest_all` now polls the failed
+sources once more after every other source has been tried, with a sixty-second
+settle first. The window is usually closed by then, the pause costs a minute
+only when something actually failed, and a run with nothing to retry never
+waits. A source that failed and then recovered keeps both `fetch_run` rows — the
+history is real — while the CLI summary reports the final state per source and
+counts the recoveries.
+
+## The bioRxiv fix produced the first biotech documents, 2026-09-22
+
+The morning run matched 3 synthetic-biology preprints out of 337 records, and
+the log says where they were: cursor 150, 240 and 300. Every one of them sits
+beyond the first page. Under the old stop condition the walk ended at 30 records
+and biotech would have stayed empty indefinitely, with `status=ok` every night.
+
 ## First live run with every source: five findings, 2026-09-22
 
 `make ingest` against all seventeen sources. 42 documents ingested, 8 sources

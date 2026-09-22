@@ -19,6 +19,7 @@ import structlog
 from pydantic import ValidationError
 
 from radar.core.db import session_scope
+from radar.core.models import FetchRun
 from radar.core.settings import Settings, get_settings
 from radar.core.types import FetchStatus
 from radar.pipeline.http import SafeHttpClient
@@ -101,12 +102,22 @@ def cmd_ingest(args: argparse.Namespace) -> int:
             limit=args.limit,
         )
 
+    # A source that failed and then recovered has two runs; the last one is
+    # what happened, and a summary that shows both reads as two failures.
+    final: dict[str, FetchRun] = {}
+    for run in runs:
+        final[str(run.source_id)] = run
+    outcomes = list(final.values())
+
     total_fetched = sum(r.fetched_count for r in runs)
     total_new = sum(r.new_count for r in runs)
-    failed = [r for r in runs if r.status == FetchStatus.ERROR]
+    failed = [r for r in outcomes if r.status == FetchStatus.ERROR]
+    recovered = len(runs) - len(outcomes) - len(failed)
 
-    print(f"\n{len(runs)} sources polled: {total_fetched} documents seen, {total_new} new")
-    for run in runs:
+    print(f"\n{len(outcomes)} sources polled: {total_fetched} documents seen, {total_new} new")
+    if recovered > 0:
+        print(f"{recovered} source(s) failed first and succeeded on the retry pass")
+    for run in outcomes:
         flag = "ok " if run.status == FetchStatus.OK else "ERR"
         line = f"  {flag} {run.source_id:<32} fetched={run.fetched_count:<5} new={run.new_count}"
         if run.error:
