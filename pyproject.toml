@@ -73,8 +73,10 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # src-layout: put the package on sys.path explicitly rather than relying on the
-# editable install's .pth file resolving in every environment.
-pythonpath = ["src"]
+# editable install's .pth file resolving in every environment. The repository
+# root comes too, so tests import shared fixtures as "tests.helpers" rather than
+# a bare "helpers" that could shadow something on sys.path.
+pythonpath = ["src", "."]
 # -ra summarises skips and failures; without it a skipped suite looks identical
 # to a passing one.
 addopts = "--strict-markers -ra"

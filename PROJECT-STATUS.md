@@ -100,6 +100,36 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## Sprint 1 Task 3: the hand-labelled set, 2026-09-21
+
+`radar label export` writes a worksheet of documents to mark up by hand;
+`radar label check` reads it back and validates it. 16 new tests, 221 pass.
+
+- **The sample is stratified by domain, not random.** arXiv's robotics and AI
+  categories produce several times more documents per day than quantum or
+  energy, so twenty documents drawn at random would be mostly robotics and whole
+  domains would go unlabelled. The maturity model has to be exercised in all
+  six, which means the yardstick does too.
+- **Sampling is seeded and the seed is written into the worksheet.** Rerunning
+  the export must return the same documents, or a Saturday of labelling belongs
+  to a set that no longer exists.
+- **The labelled set is verified as strictly as the model's output.** Every
+  hand-typed quote goes through the same `verify_quote` the pipeline uses, and
+  every claim through the same Pydantic contract. A typo in the yardstick
+  silently penalises the model for being right, and nobody would ever find it.
+- **Quotes are checked against the database, not against the worksheet's copy
+  of the abstract**, so editing the abstract in the worksheet cannot make a
+  wrong quote verify.
+- **A document with no claims is a valid label, not an empty one.** Most
+  documents contain nothing worth storing, and saying so is information.
+- YAML rather than CSV or JSON: multi-line quotes need no escaping, comments
+  survive a round trip, and the instructions live at the top of the file where
+  they are read hours after the export.
+
+Repository-root `pythonpath` added so shared database fixtures live in
+`tests/helpers.py` and are imported as `tests.helpers`, rather than one test
+module importing another.
+
 ## Sprint 1 Task 2: grounding and contracts, 2026-09-18
 
 `radar.pipeline.grounding` verifies quotes; `radar.pipeline.contracts` defines

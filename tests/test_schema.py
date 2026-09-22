@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
+from tests.helpers import make_document, make_source
 
 from radar.core.models import (
     AnalysisRun,
@@ -46,42 +47,6 @@ from radar.core.types import (
 )
 
 pytestmark = pytest.mark.db
-
-
-def make_source(session: Session, source_id: str = "arxiv-cs-ro", **kwargs: object) -> Source:
-    defaults: dict[str, object] = {
-        "id": source_id,
-        "name": "arXiv cs.RO (Robotics)",
-        "kind": SourceKind.ARXIV_CATEGORY,
-        "tier": SourceTier.T1,
-        "params": {"category": "cs.RO"},
-        "domains": ["robotics"],
-        "licence_note": "metadata CC0; link only",
-    }
-    defaults.update(kwargs)
-    source = Source(**defaults)
-    session.add(source)
-    session.flush()
-    return source
-
-
-def make_document(
-    session: Session, source: Source, external_id: str = "arXiv:2609.00001", **kwargs: object
-) -> SourceDocument:
-    defaults: dict[str, object] = {
-        "source_id": source.id,
-        "external_id": external_id,
-        "url": f"https://arxiv.org/abs/{external_id}",
-        "title": "Learning dexterous manipulation from human video",
-        "abstract": "We demonstrate a robot hand folding laundry autonomously.",
-        "retrieved_at": datetime.now(UTC),
-        "content_hash": "hash-" + external_id,
-    }
-    defaults.update(kwargs)
-    document = SourceDocument(**defaults)
-    session.add(document)
-    session.flush()
-    return document
 
 
 class TestSource:
