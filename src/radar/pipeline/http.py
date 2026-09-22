@@ -43,9 +43,18 @@ categories failed every run while their neighbours, fetched seconds apart,
 returned 200.
 """
 
-DEFAULT_MAX_ATTEMPTS = 4
-DEFAULT_BACKOFF_BASE_SECONDS = 2.0
+DEFAULT_MAX_ATTEMPTS = 6
+DEFAULT_BACKOFF_BASE_SECONDS = 3.0
 MAX_BACKOFF_SECONDS = 60.0
+"""Four attempts over roughly fifteen seconds was not enough.
+
+The first full run with every source active lost five of eleven arXiv
+categories to 406, each having exhausted its retries inside twelve seconds. A
+different five failed on the previous run, which is what says the status is
+load shedding rather than anything about those categories. Six attempts with a
+three-second base spends up to about two minutes on a shedding source, and only
+on one that is actually failing.
+"""
 
 
 class UnsafeUrlError(ValueError):

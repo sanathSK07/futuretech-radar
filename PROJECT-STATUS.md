@@ -100,6 +100,51 @@ caveat: the original import failure was never reproduced in the development
 container — a clean lockfile-based install and the explicit `pythonpath` both
 address it, but the precise cause on that machine is unconfirmed.
 
+## First live run with every source: five findings, 2026-09-22
+
+`make ingest` against all seventeen sources. 42 documents ingested, 8 sources
+failed. Every failure taught something.
+
+**A paging bug that silently discarded 82% of bioRxiv.** The fetcher stopped
+when a page came back shorter than the documented size of 100. The live API
+returned 30 records and reported a total of 164, so the walk ended after the
+first page and kept 30 of 164 — while logging a cheerful `status=ok`. A short
+page is indistinguishable from a finished window unless the server's own total
+is checked. The cursor now advances by the number of records actually returned,
+and the walk ends on an empty page or on reaching the reported total, never on
+an assumption about page size. Two tests pin it.
+
+**Two feed URLs that never existed.** `energy.gov/articles.rss` returned 404 and
+the NREL URL did not resolve. Both were plausible-looking URLs written from the
+shape of other feeds rather than read off the sites — the same failure mode this
+whole project exists to prevent, committed in its own configuration. The DOE
+feed is now `https://www.energy.gov/rss-feeds`, verified live and currently
+carrying items such as a $99M geothermal funding announcement dated 2026-09-21.
+The NREL source is deleted rather than re-guessed; it returns when a real feed
+URL has been read off their site.
+
+**NRC answered 503 from two independent networks**, so it is parked with
+`active: false` and a note, rather than left to fail every nightly run. It is
+the only source that could supply a `regulatory_event` claim for SMRs, so it is
+worth re-testing rather than forgetting.
+
+**arXiv's 406 shedding outlasts a four-attempt budget.** Five of eleven
+categories failed, each exhausting its retries within twelve seconds; a
+different five failed on the previous run, which is what confirms the status is
+load shedding and not a property of those categories. The budget is now six
+attempts with a three-second base — up to about two minutes, spent only on a
+source that is actually failing.
+
+**The RSS fetcher worked on first contact with live feeds.** MIT News parsed 50
+entries and ingested the 3 inside the window; DeepMind parsed 100 and correctly
+ingested none, all being older than a day. bioRxiv parsed 30 records across 15
+categories and matched none to synthetic biology that day, which is a real
+answer rather than a failure.
+
+Standing limitation, now measured rather than predicted: a daily window against
+a feed that carries 100 entries is comfortable, but nothing in a feed-based
+source guarantees an entry is still present when the job next runs.
+
 ## Sprint 1 Task 4: the sources arXiv cannot replace, 2026-09-21
 
 RSS/Atom and bioRxiv fetchers built and activated. 38 new tests, 264 pass. Six

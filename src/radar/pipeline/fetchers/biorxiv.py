@@ -32,9 +32,6 @@ log = structlog.get_logger(__name__)
 
 BIORXIV_API_URL = "https://api.biorxiv.org/details"
 
-PAGE_SIZE = 100
-"""The API's fixed page size; the cursor advances by this much."""
-
 MAX_PAGES = 30
 """A ceiling on paging, so a wide window cannot spend an hour walking a server.
 
@@ -142,38 +139,44 @@ class BiorxivFetcher:
 
         cursor = 0
         seen = 0
+        matched = 0
         for _page in range(MAX_PAGES):
             url = f"{BIORXIV_API_URL}/{self._server}/{start}/{end}/{cursor}"
-            response = self._client.get(url)
-            payload = response.json()
+            payload = self._client.get(url).json()
+            collection = payload.get("collection") or []
             documents, total = parse_response(payload)
-            raw_count = len(payload.get("collection") or [])
+            raw_count = len(collection)
 
-            categories = {
-                (record.get("category") or "").strip().lower()
-                for record in (payload.get("collection") or [])
-            }
+            by_doi = {(record.get("doi") or ""): record for record in collection}
+            for document in documents:
+                record = by_doi.get(document.external_id, {})
+                if self._matches(record.get("category")):
+                    matched += 1
+                    yield document
+
+            seen += raw_count
             log.info(
                 "biorxiv_page",
                 server=self._server,
                 cursor=cursor,
                 returned=raw_count,
+                seen=seen,
                 total=total,
-                categories=len(categories),
+                matched=matched,
             )
 
-            for record, document in zip(payload.get("collection") or [], documents, strict=False):
-                if self._matches(record.get("category")):
-                    yield document
-
-            seen += raw_count
-            if raw_count < PAGE_SIZE or (total and seen >= total):
+            # Stop on an empty page, or once the server's own total is reached.
+            # Deliberately not "this page was shorter than a full one": the live
+            # API's page size is not the documented one, and that assumption
+            # threw away 134 of 164 records without a word.
+            if raw_count == 0 or (total and seen >= total):
                 return
-            cursor += PAGE_SIZE
+            cursor += raw_count
         else:
             log.warning(
                 "biorxiv_page_limit_reached",
                 server=self._server,
                 pages=MAX_PAGES,
-                note="the window was not fully walked; narrow --since",
+                seen=seen,
+                note="the window was not fully walked; narrow the --since window",
             )

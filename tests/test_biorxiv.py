@@ -147,3 +147,74 @@ class TestDiscovery:
             fetcher = BiorxivFetcher(client)
             with pytest.raises(InvalidJsonError, match="did not return JSON"):
                 list(fetcher.discover(datetime(2026, 9, 1, tzinfo=UTC)))
+
+
+class TestPaging:
+    """The live API's page size is not the documented one."""
+
+    def test_a_short_page_does_not_end_the_walk(self) -> None:
+        """The bug the first live run hid: 30 returned, 164 total, 134 lost.
+
+        A page shorter than the documented size is indistinguishable from a
+        finished window unless the server's own total is checked, so the walk
+        ends on an empty page or on reaching that total — never on a guess
+        about page size.
+        """
+        pages = [
+            {
+                "messages": [{"total": 5}],
+                "collection": [
+                    {
+                        "doi": f"10.1101/2026.09.14.{index:06d}",
+                        "title": f"Preprint {index}",
+                        "date": "2026-09-14",
+                        "category": "synthetic biology",
+                        "abstract": "An abstract.",
+                    }
+                    for index in range(2)
+                ],
+            },
+            {
+                "messages": [{"total": 5}],
+                "collection": [
+                    {
+                        "doi": f"10.1101/2026.09.15.{index:06d}",
+                        "title": f"Preprint {index}",
+                        "date": "2026-09-15",
+                        "category": "synthetic biology",
+                        "abstract": "An abstract.",
+                    }
+                    for index in range(3)
+                ],
+            },
+        ]
+        cursors: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            cursors.append(str(request.url).rsplit("/", 1)[-1])
+            page = pages[len(cursors) - 1] if len(cursors) <= len(pages) else {"collection": []}
+            return httpx.Response(200, text=json.dumps(page))
+
+        transport = httpx.MockTransport(handler)
+        with SafeHttpClient(
+            contact="a@b.org", client=httpx.Client(transport=transport), max_attempts=1
+        ) as client:
+            found = list(BiorxivFetcher(client).discover(datetime(2026, 9, 1, tzinfo=UTC)))
+
+        assert len(found) == 5
+        assert cursors == ["0", "2"], "the cursor must advance by what was returned"
+
+    def test_an_empty_page_ends_the_walk(self) -> None:
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(200, text='{"messages":[{"total":9999}],"collection":[]}')
+
+        transport = httpx.MockTransport(handler)
+        with SafeHttpClient(
+            contact="a@b.org", client=httpx.Client(transport=transport), max_attempts=1
+        ) as client:
+            assert list(BiorxivFetcher(client).discover(datetime(2026, 9, 1, tzinfo=UTC))) == []
+        assert calls == 1, "an inflated total must not cause an endless walk"

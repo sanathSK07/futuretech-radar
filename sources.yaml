@@ -161,22 +161,15 @@ sources:
     name: US Department of Energy — Articles
     kind: rss
     tier: T2
-    params: { url: "https://www.energy.gov/articles.rss" }
+    params: { url: "https://www.energy.gov/rss-feeds" }
     domains: [energy]
     licence: "US government work; excerpt and link"
     rate_limit: { requests_per_second: 0.5 }
 
-  - id: nrel-news
-    name: NREL — News Releases
-    kind: rss
-    tier: T2
-    params: { url: "https://www.nrel.gov/news/rss/press.xml" }
-    domains: [energy]
-    licence: "US government work; excerpt and link"
-    rate_limit: { requests_per_second: 0.5 }
-    note: >-
-      National Renewable Energy Laboratory. Batteries, grid storage and solar —
-      the energy capabilities docs/05 tracks, none of which reach arXiv.
+  # nrel-news was removed on 2026-09-22. The URL shipped for it was a guess
+  # that does not exist, and NREL publishes no documented feed; guessing a
+  # second one would repeat the mistake. An NREL source returns when a real
+  # feed URL has been read off their site.
 
   - id: nrc-news
     name: US Nuclear Regulatory Commission — News
@@ -186,7 +179,10 @@ sources:
     domains: [energy]
     licence: "US government work; excerpt and link"
     rate_limit: { requests_per_second: 0.5 }
+    active: false
     note: >-
-      T1, not T2: a regulator's decision is a primary, verifiable record. This is
-      the only source in the registry that can supply a regulatory_event claim
-      for small modular reactors.
+      T1, not T2: a regulator's decision is a primary verifiable record, and this
+      is the only source that could supply a regulatory_event claim for small
+      modular reactors. Parked because the feed answered 503 from two
+      independent networks on 2026-09-22 — re-test before reactivating rather
+      than leaving a source that fails every nightly run.
