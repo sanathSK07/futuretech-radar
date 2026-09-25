@@ -12,14 +12,16 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
 import structlog
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from radar.core.db import session_scope
-from radar.core.models import FetchRun
+from radar.core.models import FetchRun, SourceDocument
 from radar.core.settings import Settings, get_settings
 from radar.core.types import FetchStatus
 from radar.pipeline.http import SafeHttpClient
@@ -35,6 +37,7 @@ from radar.pipeline.labelling import (
     render_worksheet,
     select_documents,
 )
+from radar.pipeline.prefilter import assess, load_vocabulary
 from radar.pipeline.ratelimit import LimiterRegistry
 from radar.pipeline.registry import DEFAULT_REGISTRY_PATH, load_registry, sync_registry
 
@@ -231,6 +234,87 @@ def cmd_label_check(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def cmd_prefilter_report(args: argparse.Namespace) -> int:
+    """Measure the triage gate against stored documents. Writes nothing.
+
+    This exists so the gate can be judged before anything depends on it. A gate
+    that rejects 95% is a cost saving; one that rejects 99.8% is a bug that
+    would have quietly starved the pipeline, and the only way to tell them apart
+    is to run it over a real day's corpus and read the samples.
+    """
+    try:
+        vocabulary = load_vocabulary(args.vocabulary)
+    except (FileNotFoundError, ValidationError) as exc:
+        print(f"cannot read {args.vocabulary}: {exc}", file=sys.stderr)
+        return 2
+
+    passed = 0
+    rejected = 0
+    reasons: Counter[str] = Counter()
+    domains: Counter[str] = Counter()
+    signals: Counter[str] = Counter()
+    by_source: dict[str, list[int]] = {}
+    examples: dict[bool, list[tuple[str, str]]] = {True: [], False: []}
+
+    with session_scope() as session:
+        rows = session.execute(
+            select(
+                SourceDocument.source_id, SourceDocument.title, SourceDocument.abstract
+            ).order_by(SourceDocument.retrieved_at.desc())
+        ).all()
+
+        for source_id, title, abstract in rows:
+            verdict = assess(title, abstract, vocabulary)
+            tally = by_source.setdefault(source_id, [0, 0])
+            if verdict.passed:
+                passed += 1
+                tally[0] += 1
+                domains.update(verdict.domains)
+                signals.update(verdict.signals)
+            else:
+                rejected += 1
+                tally[1] += 1
+                reasons[verdict.reason.split(":")[0]] += 1
+            bucket = examples[verdict.passed]
+            if len(bucket) < args.samples:
+                bucket.append((title[:96], verdict.reason))
+
+    total = passed + rejected
+    if total == 0:
+        print("No documents in the database. Run 'radar ingest' first.", file=sys.stderr)
+        return 1
+
+    print(f"rule_version {vocabulary.rule_version}   vocabulary {args.vocabulary}")
+    print(f"{total} documents: {passed} would reach a model, {rejected} would not")
+    print(f"  pass rate {passed / total:.1%}\n")
+
+    print("by source (pass/reject):")
+    for source_id in sorted(by_source):
+        kept, dropped = by_source[source_id]
+        share = kept / (kept + dropped) if kept + dropped else 0.0
+        print(f"  {source_id:<28} {kept:>6} / {dropped:<6}  {share:>6.1%}")
+
+    print("\nwhy documents were held back:")
+    for reason, count in reasons.most_common():
+        print(f"  {count:>6}  {reason}")
+
+    print("\ndomains among passes:")
+    for domain, count in domains.most_common():
+        print(f"  {count:>6}  {domain}")
+
+    print("\nclaim signals among passes:")
+    for signal, count in signals.most_common():
+        print(f"  {count:>6}  {signal}")
+
+    for verdict_passed, heading in ((True, "sample passes"), (False, "sample rejections")):
+        print(f"\n{heading}:")
+        for title, reason in examples[verdict_passed]:
+            print(f"  {title}\n      {reason}")
+
+    print("\nNothing was written. Read the samples before trusting the rate.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="radar", description="FutureTech Radar pipeline")
     parser.add_argument(
@@ -289,6 +373,25 @@ def build_parser() -> argparse.ArgumentParser:
     label_check = label_sub.add_parser("check", help="verify a filled-in worksheet")
     label_check.add_argument("file", help="the worksheet to check")
     label_check.set_defaults(func=cmd_label_check)
+
+    prefilter = sub.add_parser("prefilter", help="the triage gate that runs before any model")
+    prefilter_sub = prefilter.add_subparsers(dest="prefilter_command", required=True)
+    prefilter_report = prefilter_sub.add_parser(
+        "report", help="measure the gate against stored documents; writes nothing"
+    )
+    prefilter_report.add_argument(
+        "--vocabulary",
+        type=Path,
+        default=Path("prefilter.yaml"),
+        help="path to prefilter.yaml (default: %(default)s)",
+    )
+    prefilter_report.add_argument(
+        "--samples",
+        type=int,
+        default=8,
+        help="how many example titles to print per verdict (default: %(default)s)",
+    )
+    prefilter_report.set_defaults(func=cmd_prefilter_report)
 
     return parser
 

@@ -1,0 +1,192 @@
+# The triage gate's vocabulary.
+#
+# This file decides which stored documents are ever shown to a model. It is data
+# rather than code so it can be tuned without a deploy, and it is reviewed
+# through pull requests for the same reason sources.yaml is: every term here is
+# a judgement about what counts as evidence.
+#
+# Two conditions must BOTH hold for a document to pass:
+#
+#   1. it mentions at least one term from some domain, and
+#   2. it carries at least one claim signal — something that looks like an
+#      assertion about the world rather than a method or a proof.
+#
+# Condition 2 is the one that matters. The first labelling export showed every
+# sampled arXiv document was a method or theory paper: "quantum" appears in
+# thousands of papers a month that contain no capability claim at all, and
+# paying a model to read them is the single largest avoidable cost in this
+# project. A domain-term gate alone would pass nearly all of them.
+#
+# What this file must never become: a list of technology names. Terms are
+# generic domain vocabulary. Naming specific technologies here would make the
+# gate reject anything new, which is the opposite of what a radar is for.
+#
+# rule_version is derived from this file's content hash, not written by hand —
+# a hand-bumped version is a version somebody forgets to bump.
+#
+# The gate is deliberately generous, because the two errors do not cost the same.
+# A false positive costs one model call. A false negative means a real piece of
+# evidence is never looked at, and nothing in the system will ever tell us. So
+# where a term is ambiguous it stays in.
+#
+# Known ambiguous terms, kept on purpose:
+#   yield       - a core semiconductor metric, also an agricultural one. A wine
+#                 harvest report passes this gate. Pinned as a test so the
+#                 behaviour is visible rather than surprising.
+#   cell        - matched only as "cell chemistry" and "cell-free" for this
+#                 reason; bare "cell" would match most of biology.
+#   node        - a process node, also a graph node. Common in AI papers.
+#   agent       - a software agent, also a chemical one.
+#   inference   - model inference, also statistical inference.
+#   record      - a claim signal, also "records show" and "record keeping".
+
+domains:
+  ai:
+    - language model
+    - neural network
+    - transformer
+    - reinforcement learning
+    - fine-tun
+    - inference
+    - benchmark
+    - agent
+    - training run
+    - parameter count
+    - context window
+    - multimodal
+
+  robotics:
+    - robot
+    - manipulat
+    - end effector
+    - gripper
+    - locomotion
+    - humanoid
+    - teleoperat
+    - grasp
+    - actuator
+    - degrees of freedom
+    - dof
+    - propriocept
+
+  quantum:
+    - qubit
+    - quantum computer
+    - quantum processor
+    - gate fidelity
+    - error correction
+    - decoherence
+    - coherence time
+    - entangl
+    - superconducting circuit
+    - trapped ion
+    - annealing
+    - logical qubit
+
+  semiconductors:
+    - transistor
+    - lithography
+    - wafer
+    - nanometre
+    - nanometer
+    - node
+    - foundry
+    - interconnect
+    - accelerator
+    - memory bandwidth
+    - packaging
+    - yield
+    - tape-out
+    - photonic
+
+  energy:
+    - battery
+    - cell chemistry
+    - electrolys
+    - electrolyser
+    - electrolyzer
+    - fusion
+    - plasma
+    - tokamak
+    - stellarator
+    - confinement
+    - photovoltaic
+    - solar cell
+    - grid storage
+    - energy density
+    - reactor
+    - superconduct
+    - catalyst
+
+  biotech:
+    - gene editing
+    - base editing
+    - crispr
+    - protein design
+    - protein structure
+    - cell-free
+    - synthetic biolog
+    - fermentation
+    - assay
+    - sequencing
+    - expression
+    - genome
+    - enzyme
+    - clinical
+
+# A claim signal is something that reads like an assertion about the world:
+# a thing that was done, built, measured, shipped, or permitted.
+#
+# Deliberately NOT here: "propose", "framework", "we study", "novel approach",
+# "outperforms" — the vocabulary of a method paper. A paper that only proposes
+# is not evidence that anything exists yet.
+claim_signals:
+  demonstration:
+    - demonstrat
+    - we achieved
+    - achieves a
+    - achieved a
+    - measured
+    - observed
+    - realiz
+    - realis
+    - fabricat
+    - built a
+    - operated
+    - sustained
+    - maintained for
+    - ran for
+    - first time
+
+  deployment:
+    - deployed
+    - in production
+    - commercial
+    - shipped
+    - available to customers
+    - pilot plant
+    - manufactur
+    - at scale
+    - installed
+    - grid-connected
+    - in service
+
+  regulatory:
+    - approved by
+    - certified
+    - clearance
+    - licence application
+    - license application
+    - regulatory approval
+    - authoris
+    - authoriz
+    - submitted to the
+
+  record:
+    - record
+    - highest
+    - longest
+    - state of the art
+    - previous best
+    - milestone
+    - breakthrough
