@@ -45,6 +45,8 @@ from radar.pipeline.registry import DEFAULT_REGISTRY_PATH, load_registry, sync_r
 from radar.pipeline.triage import (
     DEFAULT_CHUNK_SIZE,
     STAGE_ONE_SYSTEM,
+    STAGE_TWO_MAX_TOKENS,
+    STAGE_TWO_SYSTEM,
     TOKENS_PER_VERDICT,
     Candidate,
     estimate_tokens,
@@ -342,6 +344,7 @@ def cmd_triage_estimate(args: argparse.Namespace) -> int:
                 SourceDocument.title,
                 SourceDocument.source_id,
                 Source.kind,
+                SourceDocument.abstract,
             )
             .join(Source, Source.id == SourceDocument.source_id)
             .order_by(SourceDocument.retrieved_at.desc())
@@ -350,8 +353,9 @@ def cmd_triage_estimate(args: argparse.Namespace) -> int:
             Candidate(
                 document_id=str(document_id), title=title, source_id=source_id, source_kind=kind
             )
-            for document_id, title, source_id, kind in rows
+            for document_id, title, source_id, kind, _abstract in rows
         ]
+        abstracts = [abstract for *_rest, abstract in rows]
 
     if not candidates:
         print("No documents in the database. Run 'radar ingest' first.", file=sys.stderr)
@@ -406,6 +410,35 @@ def cmd_triage_estimate(args: argparse.Namespace) -> int:
     print(f"\n--- first {args.samples} titles, as sent ---")
     for c in screened[: args.samples]:
         print(f"  [{c.source_id}] {c.title[:100]}")
+
+    # Stage two's cost depends entirely on how many documents stage one passes,
+    # which is unmeasured. Showing one number for an assumed rate would be the
+    # same mistake as the 30-tokens-per-document figure in ADR-0008: a guess
+    # wearing the clothes of a measurement. So the sensitivity is printed and the
+    # reader picks their own row.
+    stage_two_system = estimate_tokens(STAGE_TWO_SYSTEM)
+    abstract_tokens = [estimate_tokens(a) for a in (abstracts or []) if a] or [350]
+    mean_abstract = sum(abstract_tokens) // len(abstract_tokens)
+    print(
+        f"\nstage two, per document: {stage_two_system:,} prompt + ~{mean_abstract:,} "
+        f"abstract in, up to {STAGE_TWO_MAX_TOKENS} out"
+    )
+    print("  cost for one day of this corpus, by how many documents stage one passes:")
+    for share_passing in (0.10, 0.20, 0.40, 0.60, 1.00):
+        survivors = int(len(candidates) * share_passing)
+        two_in = survivors * (stage_two_system + mean_abstract + 12)
+        two_out = survivors * STAGE_TWO_MAX_TOKENS
+        two = discount * (
+            price.input_per_mtok * Decimal(two_in) / million
+            + price.output_per_mtok * Decimal(two_out) / million
+        )
+        monthly = (cost + two) * 30
+        flag = "  <-- over $20/month" if monthly > 20 else ""
+        print(
+            f"    {share_passing:>5.0%}  {survivors:>5} docs   "
+            f"${two:.2f}/day   both stages ~${monthly:.2f}/month{flag}"
+        )
+    print("  (output is costed at the ceiling, so these are upper bounds)")
 
     print("\nNothing was sent. No API key was read.")
     return 0

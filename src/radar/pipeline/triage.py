@@ -46,12 +46,15 @@ built around, so the prompt names them as examples of YES.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
 import structlog
+from pydantic import ValidationError
 
 from radar.core.types import SourceKind
+from radar.pipeline.contracts import TriageDecision
 from radar.pipeline.llm import HAIKU, ModelClient, ModelRequest, Usage
 
 log = structlog.get_logger(__name__)
@@ -334,3 +337,210 @@ def estimate_tokens(text: str) -> int:
     number should be ignored in favour of them.
     """
     return max(1, len(text) // 4)
+
+
+# --------------------------------------------------------------------- stage two ---
+
+STAGE_TWO_MAX_TOKENS = 400
+"""Room for a decision object and no more.
+
+Generous next to the four tokens stage one needs, and still a ceiling: a model
+that starts writing an essay in ``reason`` gets truncated, and truncated JSON
+fails validation loudly rather than being stored as a short explanation.
+"""
+
+STAGE_TWO_DOMAINS = ("ai", "robotics", "quantum", "semiconductors", "energy", "biotech")
+"""The six MVP domains, as slugs.
+
+Hardcoded rather than read from the database on purpose: the prompt is versioned
+by its content hash, and a prompt whose text depends on a table would change
+version whenever someone added a row, silently invalidating every eval
+comparison. A seventh domain is a deliberate prompt edit, not a data change.
+"""
+
+STAGE_TWO_SYSTEM = f"""\
+You triage documents for a technology-intelligence platform that tracks emerging \
+technology across six domains: {", ".join(STAGE_TWO_DOMAINS)}.
+
+You are given one document's title and abstract. Decide whether it is worth \
+extracting claims from, and reply with a single JSON object and nothing else.
+
+The object has exactly these fields:
+- "relevant": true or false
+- "confidence": "high", "medium" or "low"
+- "reason": one sentence a human curator can read and disagree with
+- "domains": a list of slugs from the six above; [] if none apply
+- "technology_mentions": a list of strings
+
+A document is relevant when it reports something about the state of a technology \
+in the world: a capability that was built or measured, a system deployed or sold, \
+a regulatory decision, a funding commitment to build something specific, or a \
+result that changes what is known to be achievable.
+
+A document is not relevant when its contribution is a method, a model, an \
+architecture, a proof, a survey, a benchmark or a dataset, even when the subject \
+matter is squarely in one of the six domains. Most of what arrives is this.
+
+Three rules about "technology_mentions", and they matter more than the rest.
+
+Copy strings that appear in the text. Do not translate a phrase into the \
+canonical name of the technology you believe it refers to, do not expand an \
+acronym the document did not expand, and do not add a company, product or \
+technology the document does not name. If the abstract says "a 16-DoF hand", the \
+mention is "16-DoF hand". Resolving mentions to tracked technologies happens in \
+code, from these strings, and it cannot recover from an invented one.
+
+An empty list is a correct answer. A document can be relevant and name no \
+specific technology.
+
+Never add a field that is not in the list above, and never omit one.
+
+On "confidence": "high" means the title and abstract say plainly what happened. \
+"medium" means you are reading between the lines. "low" means the abstract is too \
+vague to tell, in which case set "relevant" to true anyway — a cheap extraction \
+that finds nothing costs far less than a discarded document nobody revisits."""
+
+
+TRIAGE_DECISION_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["relevant", "confidence", "reason", "domains", "technology_mentions"],
+    "properties": {
+        "relevant": {"type": "boolean"},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "reason": {"type": "string", "maxLength": 400},
+        "domains": {
+            "type": "array",
+            "items": {"type": "string", "enum": list(STAGE_TWO_DOMAINS)},
+        },
+        "technology_mentions": {"type": "array", "items": {"type": "string"}},
+    },
+}
+"""The same shape ``TriageDecision`` enforces, in the form the API accepts.
+
+Deliberately duplicated rather than generated from the Pydantic model. A
+generated schema tracks the model automatically, which sounds better until the
+model gains a field with a default: the schema then starts *requiring* something
+the prompt never mentions, and every call fails. Two explicit definitions that a
+test compares is the safer arrangement — see
+``test_the_schema_and_the_contract_agree``.
+
+The contract is still validated in Python after the call. A schema the API
+honours makes malformed output impossible; a schema it silently ignores, which is
+what an unverified feature might do, would otherwise leave nothing checking.
+"""
+
+
+def stage_two_version(system: str = STAGE_TWO_SYSTEM) -> str:
+    """Content hash of the stage-two prompt."""
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()[:12]
+
+
+def render_document(title: str, abstract: str | None) -> str:
+    """The user turn for stage two.
+
+    Labelled rather than concatenated, so a title that ends without punctuation
+    cannot read as the first sentence of the abstract.
+    """
+    body = " ".join((abstract or "").split()) or "(no abstract available)"
+    return f"TITLE: {' '.join(title.split())}\n\nABSTRACT: {body}"
+
+
+def build_stage_two_request(
+    title: str,
+    abstract: str | None,
+    *,
+    model: str = HAIKU,
+    constrain_schema: bool = True,
+) -> ModelRequest:
+    """One triage request.
+
+    ``constrain_schema`` is on by default and can be turned off in one place if
+    the API turns out not to honour ``output_config.format`` for this model —
+    which is unverified as of 2026-09-25. Validation does not depend on it.
+    """
+    return ModelRequest(
+        model=model,
+        system=STAGE_TWO_SYSTEM,
+        prompt=render_document(title, abstract),
+        max_tokens=STAGE_TWO_MAX_TOKENS,
+        json_schema=TRIAGE_DECISION_SCHEMA if constrain_schema else None,
+    )
+
+
+class TriageParseError(ValueError):
+    """The model's stage-two output was not a usable TriageDecision.
+
+    Recorded against the document rather than retried blindly. A prompt that has
+    drifted fails on nearly everything, and a run that quietly retried each one
+    three times would spend triple the budget discovering that.
+    """
+
+
+def parse_decision(text: str) -> TriageDecision:
+    """Validate one stage-two response against the contract.
+
+    Tolerates a fenced code block, because models wrap JSON in one often enough
+    that refusing would trade a real failure for a formatting quibble. Tolerates
+    nothing else: the contract forbids extra fields, so a model that invents one
+    fails here with the offending key named, which is the whole point of
+    ``extra="forbid"``.
+    """
+    body = text.strip()
+    if body.startswith("```"):
+        lines = body.splitlines()
+        body = "\n".join(lines[1:-1] if lines[-1].strip().startswith("```") else lines[1:])
+        body = body.strip()
+
+    try:
+        payload = json.loads(body)
+    except ValueError as exc:
+        raise TriageParseError(f"not JSON: {body[:120]!r}") from exc
+
+    try:
+        return TriageDecision.model_validate(payload)
+    except ValidationError as exc:
+        raise TriageParseError(f"does not satisfy the triage contract: {exc}") from exc
+
+
+@dataclass(frozen=True, slots=True)
+class Triaged:
+    """One stage-two outcome, with the prompt that produced it."""
+
+    document_id: str
+    decision: TriageDecision
+    prompt_version: str
+
+    def __bool__(self) -> bool:
+        return self.decision.relevant
+
+
+def triage_document(
+    client: ModelClient,
+    *,
+    document_id: str,
+    title: str,
+    abstract: str | None,
+    model: str = HAIKU,
+    usage: Usage | None = None,
+    constrain_schema: bool = True,
+) -> Triaged:
+    """Triage one document against the full contract."""
+    response = client.complete(
+        build_stage_two_request(title, abstract, model=model, constrain_schema=constrain_schema)
+    )
+    if usage is not None:
+        usage.record(response)
+
+    if response.truncated:
+        raise TriageParseError(
+            f"the response hit the {STAGE_TWO_MAX_TOKENS}-token ceiling and is "
+            "incomplete. Raise STAGE_TWO_MAX_TOKENS rather than parsing the "
+            "fragment; a truncated decision is not a cautious decision."
+        )
+
+    return Triaged(
+        document_id=document_id,
+        decision=parse_decision(response.text),
+        prompt_version=stage_two_version(),
+    )

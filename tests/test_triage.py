@@ -11,22 +11,32 @@ from __future__ import annotations
 import pytest
 
 from radar.core.types import SourceKind
+from radar.pipeline.contracts import TriageDecision
 from radar.pipeline.llm import HAIKU, ScriptedClient, Usage
 from radar.pipeline.triage import (
     DEFAULT_CHUNK_SIZE,
     STAGE_ONE_SYSTEM,
+    STAGE_TWO_DOMAINS,
+    STAGE_TWO_SYSTEM,
     TOKENS_PER_VERDICT,
+    TRIAGE_DECISION_SCHEMA,
     YES,
     Candidate,
     MisalignedChunkError,
+    TriageParseError,
     UnreadableVerdictError,
     build_request,
+    build_stage_two_request,
     estimate_tokens,
     needs_screening,
+    parse_decision,
     parse_verdicts,
     prompt_version,
     render_chunk,
+    render_document,
     screen,
+    stage_two_version,
+    triage_document,
 )
 
 
@@ -259,3 +269,171 @@ class TestEstimation:
         """A zero would make a dry-run cost estimate come out free."""
         assert estimate_tokens("") == 1
         assert estimate_tokens("ab") == 1
+
+
+class TestStageTwoPrompt:
+    def test_it_forbids_inventing_technology_names(self) -> None:
+        """The brief's hardest rule, and the one a model will break helpfully.
+
+        A model that expands an acronym or substitutes a canonical name is being
+        useful and destroying provenance: entity resolution runs off these
+        strings and cannot recover from one the document never contained.
+        """
+        assert "Copy strings that appear in the text" in STAGE_TWO_SYSTEM
+        assert "do not expand an acronym" in STAGE_TWO_SYSTEM
+        assert "does not name" in STAGE_TWO_SYSTEM
+
+    def test_it_allows_an_empty_mention_list(self) -> None:
+        """Otherwise a model under pressure to fill the field invents one."""
+        assert "An empty list is a correct answer" in STAGE_TWO_SYSTEM
+
+    def test_it_names_the_six_domains(self) -> None:
+        for domain in STAGE_TWO_DOMAINS:
+            assert domain in STAGE_TWO_SYSTEM
+
+    def test_low_confidence_still_passes_the_document_on(self) -> None:
+        """The asymmetry again: a cheap extraction that finds nothing beats a
+        discarded document nobody revisits."""
+        assert '"relevant" to true anyway' in STAGE_TWO_SYSTEM
+
+    def test_the_domains_are_not_read_from_the_database(self) -> None:
+        """A prompt whose text depends on a table changes version when someone
+        adds a row, silently invalidating every eval comparison."""
+        assert STAGE_TWO_DOMAINS == (
+            "ai",
+            "robotics",
+            "quantum",
+            "semiconductors",
+            "energy",
+            "biotech",
+        )
+
+    def test_its_version_is_separate_from_stage_one(self) -> None:
+        assert stage_two_version() != prompt_version()
+
+
+class TestStageTwoSchema:
+    def test_the_schema_and_the_contract_agree(self) -> None:
+        """The schema is written by hand rather than generated from the model.
+
+        A generated schema tracks the model automatically, which sounds better
+        until the model gains a field with a default: the schema then requires
+        something the prompt never mentions and every call fails. Two explicit
+        definitions and this test is the safer arrangement — but only if the test
+        exists.
+        """
+        assert set(TRIAGE_DECISION_SCHEMA["required"]) == set(  # type: ignore[arg-type]
+            TriageDecision.model_fields
+        )
+        assert set(TRIAGE_DECISION_SCHEMA["properties"]) == set(  # type: ignore[arg-type]
+            TriageDecision.model_fields
+        )
+
+    def test_it_forbids_extra_properties_like_the_contract_does(self) -> None:
+        assert TRIAGE_DECISION_SCHEMA["additionalProperties"] is False
+
+    def test_the_confidence_values_match_the_validator(self) -> None:
+        enum = TRIAGE_DECISION_SCHEMA["properties"]["confidence"]["enum"]  # type: ignore[index]
+        assert set(enum) == {"high", "medium", "low"}
+
+    def test_the_request_carries_the_schema_by_default(self) -> None:
+        assert build_stage_two_request("t", "a").json_schema == TRIAGE_DECISION_SCHEMA
+
+    def test_and_can_be_turned_off_in_one_place(self) -> None:
+        """output_config.format is unverified against the live API; validation
+        must not depend on it."""
+        assert build_stage_two_request("t", "a", constrain_schema=False).json_schema is None
+
+
+class TestDocumentRendering:
+    def test_the_title_and_abstract_are_labelled(self) -> None:
+        """Concatenated, a title with no closing punctuation reads as the first
+        sentence of the abstract."""
+        rendered = render_document("A Logical Qubit", "We measured 99.7% fidelity.")
+        assert rendered.startswith("TITLE: A Logical Qubit")
+        assert "ABSTRACT: We measured 99.7% fidelity." in rendered
+
+    def test_a_missing_abstract_says_so_rather_than_being_blank(self) -> None:
+        assert "(no abstract available)" in render_document("A title", None)
+        assert "(no abstract available)" in render_document("A title", "   ")
+
+    def test_wrapping_is_collapsed(self) -> None:
+        rendered = render_document("A\ntitle", "An\nabstract\nwrapped")
+        assert "TITLE: A title" in rendered
+        assert "ABSTRACT: An abstract wrapped" in rendered
+
+
+DECISION_JSON = (
+    '{"relevant": true, "confidence": "high", "reason": "Reports a measured fidelity.", '
+    '"domains": ["quantum"], "technology_mentions": ["logical qubit"]}'
+)
+
+
+class TestStageTwoParsing:
+    def test_a_clean_decision_validates(self) -> None:
+        decision = parse_decision(DECISION_JSON)
+        assert decision.relevant
+        assert decision.domains == ["quantum"]
+
+    def test_a_fenced_block_is_tolerated(self) -> None:
+        """Models wrap JSON in fences often enough that refusing would trade a
+        real failure for a formatting quibble."""
+        assert parse_decision(f"```json\n{DECISION_JSON}\n```").relevant
+
+    def test_an_invented_field_is_refused_with_its_name(self) -> None:
+        """What extra='forbid' is for: a model inventing a field means the prompt
+        and the contract have drifted, and dropping it silently hides that."""
+        payload = DECISION_JSON[:-1] + ', "maturity_stage": "M4"}'
+        with pytest.raises(TriageParseError, match="maturity_stage"):
+            parse_decision(payload)
+
+    def test_a_missing_field_is_refused(self) -> None:
+        with pytest.raises(TriageParseError, match="triage contract"):
+            parse_decision('{"relevant": true, "confidence": "high"}')
+
+    def test_an_invalid_confidence_is_refused(self) -> None:
+        payload = DECISION_JSON.replace('"high"', '"very high"')
+        with pytest.raises(TriageParseError):
+            parse_decision(payload)
+
+    def test_prose_is_refused_rather_than_guessed_at(self) -> None:
+        with pytest.raises(TriageParseError, match="not JSON"):
+            parse_decision("This document looks relevant to me.")
+
+
+class TestTriageDocument:
+    def test_it_returns_the_decision_and_the_prompt_version(self) -> None:
+        client = ScriptedClient.answering(DECISION_JSON)
+        result = triage_document(
+            client, document_id="d1", title="A Logical Qubit", abstract="We measured 99.7%."
+        )
+        assert result.document_id == "d1"
+        assert result.decision.relevant
+        assert result.prompt_version == stage_two_version()
+        assert bool(result) is True
+
+    def test_usage_is_recorded_when_asked(self) -> None:
+        usage = Usage(batch=True)
+        client = ScriptedClient.answering(DECISION_JSON)
+        triage_document(client, document_id="d", title="t", abstract="a", usage=usage)
+        assert usage.calls == 1
+        assert usage.estimated_cost_usd > 0
+
+    def test_a_truncated_response_is_refused_not_parsed(self) -> None:
+        """A truncated decision is not a cautious decision; the fix is a larger
+        ceiling, and parsing the fragment would hide that."""
+        from radar.pipeline.llm import ModelResponse
+
+        client = ScriptedClient(
+            responses=[
+                ModelResponse(
+                    text='{"relevant": true, "confid',
+                    model=HAIKU,
+                    input_tokens=900,
+                    output_tokens=400,
+                    stop_reason="max_tokens",
+                )
+            ]
+        )
+        with pytest.raises(TriageParseError, match="token ceiling"):
+            triage_document(client, document_id="d", title="t", abstract="a")
