@@ -31,10 +31,51 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Any row still on the new kind would make the old constraint unsatisfiable,
-    # so move them back to the kind they were migrated from. The params differ
-    # between the two fetchers, which is why this is not a silent no-op: a
-    # downgraded row needs params.category restored by hand before it will run.
-    op.execute("DELETE FROM source WHERE kind = 'arxiv_oai'")
+    """Convert arxiv_oai sources back, rather than deleting them.
+
+    The first version of this ran ``DELETE FROM source WHERE kind = 'arxiv_oai'``,
+    which is wrong twice over. It destroys the sources — and with them, via
+    cascade or refusal, every document ever fetched through them. And it simply
+    fails: ``source_document.source_id`` references ``source.id``, so the delete
+    raises a foreign key violation the moment any document exists.
+
+    It passed CI regardless, because CI migrates a *bare* database where the
+    delete matches no rows. It only surfaced on a workspace database with four
+    documents in it. A downgrade tested only against an empty schema is not
+    tested.
+
+    So convert instead. A setSpec maps back to a dotted category by dropping its
+    first segment and joining the rest with a dot, which is exactly how the
+    eleven sources were migrated forward: ``cs:cs:RO`` to ``cs.RO``,
+    ``physics:quant-ph`` to ``quant-ph``, ``physics:cond-mat:mtrl-sci`` to
+    ``cond-mat.mtrl-sci``. Rows keep their ids, so documents stay attached.
+    """
+    op.execute(
+        """
+        UPDATE source
+           SET kind = 'arxiv_category',
+               params = jsonb_build_object(
+                   'category',
+                   array_to_string((string_to_array(params->>'set', ':'))[2:], '.')
+               )
+         WHERE kind = 'arxiv_oai'
+           AND params ? 'set'
+        """
+    )
+    # A row with no params.set cannot be converted, and leaving it would make the
+    # old constraint unsatisfiable. Fail loudly rather than deleting someone's
+    # source: the operator can decide what it should become.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM source WHERE kind = 'arxiv_oai') THEN
+                RAISE EXCEPTION
+                    'cannot downgrade: arxiv_oai source(s) have no params.set to '
+                    'convert. Set params.category and kind by hand, then retry.';
+            END IF;
+        END $$
+        """
+    )
     op.drop_constraint("kind_valid", "source", type_="check")
     op.create_check_constraint("kind_valid", "source", _OLD)

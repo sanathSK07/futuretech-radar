@@ -11,6 +11,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from alembic.config import Config
@@ -648,3 +649,56 @@ class TestAnalysisRun:
     def test_an_unknown_stage_is_refused(self, session: Session) -> None:
         with pytest.raises(IntegrityError, match="stage_valid"):
             make_analysis_run(session, stage="vibes")  # type: ignore[arg-type]
+
+
+class TestMigration0003Downgrade:
+    """The setSpec-to-category conversion in 0003's downgrade.
+
+    The first version of that downgrade ran `DELETE FROM source WHERE kind =
+    'arxiv_oai'`, which fails on a foreign key the moment any document exists and
+    destroys the sources when it does not. It passed CI anyway, because CI
+    migrates a bare database where the delete matches nothing. A downgrade tested
+    only against an empty schema is not tested.
+
+    These run the actual SQL expression from the migration, so a regression in it
+    fails here rather than during someone's rollback.
+    """
+
+    SETSPEC_TO_CATEGORY: ClassVar[dict[str, str]] = {
+        "cs:cs:AI": "cs.AI",
+        "cs:cs:LG": "cs.LG",
+        "cs:cs:CL": "cs.CL",
+        "cs:cs:MA": "cs.MA",
+        "cs:cs:RO": "cs.RO",
+        "cs:cs:AR": "cs.AR",
+        "cs:cs:ET": "cs.ET",
+        "physics:quant-ph": "quant-ph",
+        "physics:physics:plasm-ph": "physics.plasm-ph",
+        "physics:cond-mat:mtrl-sci": "cond-mat.mtrl-sci",
+        "q-bio:q-bio:BM": "q-bio.BM",
+    }
+
+    @pytest.mark.parametrize("set_spec,expected", sorted(SETSPEC_TO_CATEGORY.items()))
+    def test_each_setspec_converts_back(
+        self, session: Session, set_spec: str, expected: str
+    ) -> None:
+        got = session.execute(
+            text("SELECT array_to_string((string_to_array(:s, ':'))[2:], '.')"),
+            {"s": set_spec},
+        ).scalar_one()
+        assert got == expected
+
+    def test_it_covers_every_setspec_the_registry_actually_uses(self) -> None:
+        """Ties the migration to sources.yaml, so adding a twelfth category with
+        an unusual setSpec shape fails here instead of during a rollback."""
+        from radar.core.types import SourceKind
+        from radar.pipeline.registry import load_registry
+
+        registry = load_registry(PROJECT_ROOT / "sources.yaml")
+        in_use = {
+            str(source.params["set"])
+            for source in registry.sources
+            if source.kind == SourceKind.ARXIV_OAI
+        }
+        assert in_use <= set(self.SETSPEC_TO_CATEGORY)
+        assert in_use, "no arxiv_oai sources found; this test is no longer checking anything"

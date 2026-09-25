@@ -14,6 +14,7 @@ import logging
 import sys
 from collections import Counter
 from collections.abc import Sequence
+from decimal import Decimal
 from pathlib import Path
 
 import structlog
@@ -21,7 +22,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 from radar.core.db import session_scope
-from radar.core.models import FetchRun, SourceDocument
+from radar.core.models import FetchRun, Source, SourceDocument
 from radar.core.settings import Settings, get_settings
 from radar.core.types import FetchStatus
 from radar.pipeline.http import SafeHttpClient
@@ -37,9 +38,19 @@ from radar.pipeline.labelling import (
     render_worksheet,
     select_documents,
 )
+from radar.pipeline.llm import BATCH_DISCOUNT, HAIKU, PRICES
 from radar.pipeline.prefilter import assess, load_vocabulary
 from radar.pipeline.ratelimit import LimiterRegistry
 from radar.pipeline.registry import DEFAULT_REGISTRY_PATH, load_registry, sync_registry
+from radar.pipeline.triage import (
+    DEFAULT_CHUNK_SIZE,
+    STAGE_ONE_SYSTEM,
+    TOKENS_PER_VERDICT,
+    Candidate,
+    estimate_tokens,
+    needs_screening,
+    prompt_version,
+)
 
 
 def configure_logging(settings: Settings) -> None:
@@ -315,6 +326,90 @@ def cmd_prefilter_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_triage_estimate(args: argparse.Namespace) -> int:
+    """Print what stage one would send and what it would cost. Makes no calls.
+
+    Deliberately available before an API key is configured, so the bill can be
+    read before it is incurred rather than explained afterwards. The token counts
+    are a four-characters-per-token approximation; the first real run replaces
+    them with measured counts and these should be ignored in favour of those.
+    """
+    candidates: list[Candidate] = []
+    with session_scope() as session:
+        rows = session.execute(
+            select(
+                SourceDocument.id,
+                SourceDocument.title,
+                SourceDocument.source_id,
+                Source.kind,
+            )
+            .join(Source, Source.id == SourceDocument.source_id)
+            .order_by(SourceDocument.retrieved_at.desc())
+        ).all()
+        candidates = [
+            Candidate(
+                document_id=str(document_id), title=title, source_id=source_id, source_kind=kind
+            )
+            for document_id, title, source_id, kind in rows
+        ]
+
+    if not candidates:
+        print("No documents in the database. Run 'radar ingest' first.", file=sys.stderr)
+        return 1
+
+    screened = [c for c in candidates if needs_screening(c)]
+    skipped = len(candidates) - len(screened)
+
+    chunk_size = args.chunk_size
+    chunks = max(1, -(-len(screened) // chunk_size))  # ceiling division
+    system_tokens = estimate_tokens(STAGE_ONE_SYSTEM)
+    title_tokens = sum(estimate_tokens(c.title) for c in screened)
+    # The system prompt is sent once per chunk, not once per document. Getting
+    # this wrong by a factor of the chunk size is exactly the error ADR-0008 made.
+    input_tokens = chunks * system_tokens + title_tokens
+    output_tokens = len(screened) * TOKENS_PER_VERDICT
+
+    price = PRICES[args.model]
+    million = Decimal("1000000")
+    discount = Decimal("1") if args.list_price else BATCH_DISCOUNT
+    cost = discount * (
+        price.input_per_mtok * Decimal(input_tokens) / million
+        + price.output_per_mtok * Decimal(output_tokens) / million
+    )
+
+    print(f"prompt_version {prompt_version()}   model {args.model}")
+    print(f"{len(candidates)} documents stored")
+    print(f"  {len(screened)} would be screened by stage one")
+    print(f"  {skipped} skip the model entirely (non-arXiv sources go straight to stage two)")
+    print(f"\nestimated tokens: {input_tokens:,} in, {output_tokens:,} out")
+    print(f"  system prompt is {system_tokens:,} tokens, sent once per document")
+    rate = "list" if args.list_price else "batch"
+    print(f"  ~${cost:.2f} at {rate} rates for this corpus")
+    if not args.list_price:
+        print("  (batch rates; add --list-price to see the undiscounted figure)")
+
+    # The system prompt dominates the input cost at these title lengths, and that
+    # is worth showing rather than burying: shortening it is the highest-leverage
+    # edit available, and nobody would guess that from the totals.
+    share = (chunks * system_tokens) / input_tokens if input_tokens else 0
+    print(f"  the system prompt is {share:.0%} of input tokens")
+    per_document = (chunks * system_tokens) / len(screened) if screened else 0
+    print(f"  instruction overhead is {per_document:.0f} tokens per document")
+    print(
+        f"  (at one title per request it would be {system_tokens:,}; that was the ADR-0008 error)"
+    )
+
+    print("\n--- system prompt, as sent ---")
+    print(STAGE_ONE_SYSTEM)
+
+    print(f"\n--- first {args.samples} titles, as sent ---")
+    for c in screened[: args.samples]:
+        print(f"  [{c.source_id}] {c.title[:100]}")
+
+    print("\nNothing was sent. No API key was read.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="radar", description="FutureTech Radar pipeline")
     parser.add_argument(
@@ -392,6 +487,30 @@ def build_parser() -> argparse.ArgumentParser:
         help="how many example titles to print per verdict (default: %(default)s)",
     )
     prefilter_report.set_defaults(func=cmd_prefilter_report)
+
+    triage = sub.add_parser("triage", help="the model passes that decide what is worth extracting")
+    triage_sub = triage.add_subparsers(dest="triage_command", required=True)
+    triage_estimate = triage_sub.add_parser(
+        "estimate", help="print stage one's prompt and cost for the stored corpus; makes no calls"
+    )
+    triage_estimate.add_argument(
+        "--model", default=HAIKU, choices=sorted(PRICES), help="default: %(default)s"
+    )
+    triage_estimate.add_argument(
+        "--list-price",
+        action="store_true",
+        help="price at list rates instead of the Batch API's 50%% discount",
+    )
+    triage_estimate.add_argument(
+        "--chunk-size",
+        type=int,
+        default=DEFAULT_CHUNK_SIZE,
+        help="titles per request (default: %(default)s)",
+    )
+    triage_estimate.add_argument(
+        "--samples", type=int, default=10, help="titles to print (default: %(default)s)"
+    )
+    triage_estimate.set_defaults(func=cmd_triage_estimate)
 
     return parser
 

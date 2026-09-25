@@ -87,6 +87,42 @@ the 20% survival rate is an **assumption, not a measurement**; the first live
 stage-1 run replaces it, and if it comes back at 60% this ADR needs revisiting
 rather than quietly absorbing the cost.
 
+## Correction, 2026-09-25: the cost table above was wrong by 9x
+
+The table costed stage one at 30 input tokens per document. That counted the title
+and forgot that the system prompt is resent on every request. Measured with
+`radar triage estimate`: the instructions are 532 tokens and a title is about 12,
+so at one document per call the prompt is **97% of input tokens**.
+
+| Stage one, per month at 2,738 arXiv documents a day | Input | Output | Total |
+| --- | --- | --- | --- |
+| One title per request (what the table above assumed) | $22.60 | $1.66 | **$24.26** |
+| Fifty titles per request | $0.94 | $1.66 | **$2.60** |
+
+Prompt caching does not fix it and would have hidden the problem. Haiku 4.5 will
+not cache a prefix under 4,096 tokens and **returns no error when asked to**, so a
+`cache_control` marker on a 532-token prompt pays list price while looking like a
+saving; and caching does not combine usefully with the Batch API, where an entry
+expires before the request that would read it. Both from the published docs, read
+2026-09-25.
+
+So stage one sends titles in chunks of fifty, which takes the instruction overhead
+from 532 tokens per document to about 11. The two-stage total becomes roughly
+$8.80/month rather than the $8.05 above — the stage-one saving is real, and the
+stage-two figure still rests on the unmeasured 20% survival assumption.
+
+The price of chunking is that a misread response corrupts fifty verdicts instead
+of one. Mitigated rather than accepted: every title is numbered, every verdict must
+carry its number back, and a chunk whose numbers do not match exactly is halved and
+retried down to a single title rather than trusted. A verdict attached to the wrong
+document would become a claim about the wrong paper, which is worse than any
+overspend.
+
+The table above is left as written. It was wrong in a way worth being able to find
+again: an estimate built from the per-item cost while ignoring the fixed overhead
+per request, which is the same shape of error as reading a 55.4% pass rate without
+reading the samples.
+
 ## Alternatives considered
 
 - **Tune the vocabulary.** Drop `benchmark`, `demonstrat`, `record`, `inference`,
