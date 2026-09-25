@@ -3,18 +3,18 @@
 Living tracker. Update at the end of every working session. Newest entries first within each list.
 
 **Phase:** 1 complete → Phase 2 (MVP) starts 2026-09-22
-**Last updated:** 2026-09-22
+**Last updated:** 2026-09-25
 
 ## Current task
 
-- **Verify the OAI-PMH harvest on SK's Mac** (this workspace's egress blocks `export.arxiv.org`, so every fetcher test here runs against fixtures):
-  1. `git pull && make check` — 295 tests, and migration `0003` widens the `source.kind` CHECK.
-  2. `make migrate` — `0003` must land before the registry syncs, or the `source.kind` CHECK rejects every arXiv row.
-  3. `make ingest` — it syncs the registry first, so the eleven arXiv sources switch to `kind: arxiv_oai` on the way in. Their ids are unchanged, so stored documents stay attached and nothing is re-inserted. Expect a much larger harvest than the Atom API returned, because OAI's `from` matches revisions as well as new submissions.
-- Then Sprint 1 continues: the Anthropic model client (Haiku triage, Sonnet extraction via Batch), prompts, and the eval script.
+- **Build the two-stage model triage** (ADR-0008): stage 1 reads the title alone and returns one token; stage 2 reads the abstract for survivors and returns a `TriageDecision`. Non-arXiv sources skip stage 1. Estimated ~$8/month against a measured 2,738 arXiv documents a day; the 20% survival rate in that estimate is an assumption and the first live run replaces it.
+- **SK, outstanding:** GitHub repo secrets `RADAR_DATABASE_URL` and `RADAR_CRAWLER_CONTACT`; merge the two Dependabot PRs; enable Dependabot alerts; delete the Neon-downloaded `.env` from Downloads.
+- **Blocked on nothing.** bioRxiv is failing on their side, not ours (see below).
 
 ## Completed
 
+- 2026-09-25 — Sprint 1 · the keyword prefilter is a **negative result**, recorded in ADR-0008 and not shipped. Measured against the real corpus with `radar prefilter report` (writes nothing): 55.4% pass rate, `benchmark` matching condensed-matter theory as domain `ai`, `demonstrat` firing on 971 of 1,525 passes because academic register uses it to mean "we prove", and zero domain terms matched on a DOE funding announcement, a product launch, a medical device and a materials result. Replaced by a title-first model pass, priced at ~$8/month against ~$31 for the naive approach. Also: `EmptyResponseError` now distinguishes a 200 with no body from malformed JSON. 338 tests; `ruff`, `mypy --strict` and `alembic check` clean.
+- 2026-09-25 — arXiv OAI endpoint corrected to the post-redirect host `https://oaipmh.arxiv.org/oai`. The first live harvest showed `export.arxiv.org/oai2` answering 301 on all eleven sources, costing a wasted rate-limit wait each. The docstring claiming that host answers 404 was wrong — the 404 came from probing `/oai2` on it.
 - 2026-09-22 — Sprint 1 · arXiv harvesting moved from the Atom search API to OAI-PMH (ADR-0007). `arxiv_oai` source kind, `ArxivOaiFetcher` with resumption-token paging, a repeat-token guard and a logged page ceiling; the eleven arXiv registry entries now carry setSpecs (`cs:cs:RO`, `physics:quant-ph`, `q-bio:q-bio:BM`) with their ids unchanged; migration `0003` widens the `source.kind` CHECK; `DEFAULT_MAX_BYTES` 5 MB → 32 MB. `make smoke-arxiv` now smokes the OAI transport, which leaves the Atom fetcher unreachable from the registry — listed as debt below. 295 tests; `ruff`, `mypy --strict` and `alembic check` clean.
 - 2026-09-18 — Sprint 0 · Task 3: ingestion. `sources.yaml` with 15 declared sources (11 active arXiv categories covering all six MVP domains; bioRxiv and RSS declared but inactive until their fetchers land in Sprint 1). `src/radar/pipeline/`: a source registry with Pydantic validation and database sync, a host-keyed rate limiter, an SSRF-guarded HTTP client, the `Fetcher` protocol, the arXiv Atom fetcher (defusedxml), ingest orchestration with `fetch_run` accounting, and the `radar` CLI (`sources list|sync`, `ingest`, `smoke`). Daily GitHub Actions ingest workflow. 130 tests; `ruff`, `mypy --strict` and `alembic check` clean.
 - 2026-09-18 — Repository pushed to `github.com/sanathSK07/futuretech-radar` (public).
@@ -26,6 +26,44 @@ Living tracker. Update at the end of every working session. Newest entries first
   - CI (`.github/workflows/ci.yml`): lint, typecheck, migrate, drift check and tests against a pgvector service container, plus a `pip-audit` job. Actions pinned by SHA where third-party; `permissions: contents: read`.
 - 2026-09-17 — Sprint 0 · Task 1: repository skeleton and initial commit — root README written around the evidence model, MIT `LICENSE`, `DATA-LICENSE.md` (CC BY 4.0), `.gitignore`, `SECURITY.md`, Dependabot config (Actions, pip, npm), Correction issue template. Push to `github.com/sanathSK07/futuretech-radar` and repository security settings: see notes below.
 - 2026-09-17 — Phase 1 research and specification: `docs/01`–`08`, ADR-0001–0006, executive summary. Verified sources for APIs, pricing, hosting limits, competitors.
+
+## First harvest over OAI-PMH, and a gate that failed, 2026-09-25
+
+2,239 new documents on the first run, 2,751 stored in total. Eleven arXiv sources
+green. Three findings.
+
+**The endpoint was wrong and I had recorded the reason backwards.** Every arXiv
+request answered `301` from `export.arxiv.org/oai2` to `oaipmh.arxiv.org/oai`.
+The fetcher's docstring said that second host answers 404 and the first is
+canonical. The 404 I had seen came from requesting `/oai2` on it; the path is
+`/oai`. Because the rate limiter runs before every redirect hop, eleven sources
+each burned three seconds being told where to go — the identical bug already
+fixed once for the Atom API's `http://` form, reintroduced in a new file.
+
+**bioRxiv is broken on their side.** `HTTP/2 200`, `content-length: 0`,
+`content-type: application/json`, for both the failing date range and a wider
+one. Nothing is wrong with the request. The error message said "did not return
+JSON", which reads like a parser fault and sent the first pass of diagnosis
+looking for a bug in code that had been handed nothing to parse; there is now a
+distinct `EmptyResponseError` saying so. No code change beyond the message —
+this one is theirs to fix, and the source is recorded as failing in `fetch_run`
+each run until it is.
+
+**The keyword prefilter does not work, and the summary line hid it.** 55.4% pass
+rate reads like a partial success. The samples underneath it read like a failure:
+`benchmark`, which I had put in the AI term list, is the most common word in
+method papers, so a plasmon-pole theory paper matched domain `ai`; `demonstrat`
+fired on 971 of 1,525 passes because academic writing uses "we demonstrate that"
+to mean "we prove"; and four rejected titles — a DOE funding announcement, a
+product launch, a medical device, a materials result — matched **no domain term
+at all**, because the vocabulary was written from arXiv's register and is blind
+to the newsroom register those sources exist to supply. Full reasoning and the
+cost table in ADR-0008.
+
+The part worth keeping is the process: the gate was measured against a real day's
+corpus by a command that writes nothing, before any schema depended on it, so
+throwing it away cost nothing but the time to build it. The part worth
+remembering is that reading the aggregate would have shipped it.
 
 ## Repository notes (Task 1 hand-off, 2026-09-17)
 
@@ -580,7 +618,7 @@ uses HTTPS directly, and a test asserts the scheme so it cannot regress.
 
 ## Decisions log
 
-See `docs/decisions/`. ADR-0001 stack · ADR-0002 Postgres-only · ADR-0003 GitHub Actions scheduling · ADR-0004 claim as atomic unit · ADR-0005 no composite score / no auth in MVP · ADR-0006 human review gate · ADR-0007 arXiv harvest over OAI-PMH.
+See `docs/decisions/`. ADR-0001 stack · ADR-0002 Postgres-only · ADR-0003 GitHub Actions scheduling · ADR-0004 claim as atomic unit · ADR-0005 no composite score / no auth in MVP · ADR-0006 human review gate · ADR-0007 arXiv harvest over OAI-PMH · ADR-0008 no keyword prefilter.
 
 ## Sprint self-review log
 

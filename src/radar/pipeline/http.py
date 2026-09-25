@@ -74,6 +74,15 @@ class ResponseTooLargeError(ValueError):
     """The response exceeded the byte cap."""
 
 
+class EmptyResponseError(ValueError):
+    """The server answered successfully with no body at all.
+
+    A subclass of InvalidJsonError's sibling rather than of it, because the two
+    mean opposite things about whose bug it is: an empty body is the server's,
+    malformed JSON is probably ours.
+    """
+
+
 class InvalidJsonError(ValueError):
     """A source that should answer JSON answered something else."""
 
@@ -164,7 +173,21 @@ class FetchResult:
         Raises InvalidJsonError naming the URL, because an API that starts
         answering with an HTML error page otherwise produces a decode error
         several frames away from anything that identifies the source.
+
+        An empty body gets its own message. bioRxiv answered ``200`` with
+        ``content-length: 0`` for every date range on 2026-09-25, and "did not
+        return JSON" sent the first hour of diagnosis looking for a parser bug
+        in a response that had nothing in it to parse. The two faults need
+        different reactions: malformed JSON means our expectations drifted from
+        the API, an empty body means the server is broken and there is nothing
+        to fix here.
         """
+        if not self.text.strip():
+            raise EmptyResponseError(
+                f"{self.url} returned {self.status_code} with an empty body "
+                f"(content-type {self.content_type}). Nothing was wrong with the "
+                "request; the server sent no data."
+            )
         try:
             return json.loads(self.text)
         except ValueError as exc:

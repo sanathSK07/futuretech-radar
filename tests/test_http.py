@@ -264,3 +264,49 @@ class TestBackoffDelay:
 
 def test_transient_error_type_is_exported() -> None:
     assert issubclass(TransientHttpError, RuntimeError)
+
+
+class TestEmptyBodies:
+    """A 200 with no body is the server's fault, and must say so.
+
+    bioRxiv answered 200 with content-length: 0 for every date range on
+    2026-09-25. The old message said "did not return JSON", which reads like a
+    parser problem and sent diagnosis looking for a bug in code that was handed
+    nothing to parse.
+    """
+
+    def test_an_empty_body_is_not_reported_as_bad_json(self) -> None:
+        from radar.pipeline.http import EmptyResponseError, FetchResult
+
+        result = FetchResult(
+            url="https://api.example.org/details/0",
+            status_code=200,
+            text="",
+            content_type="application/json",
+        )
+        with pytest.raises(EmptyResponseError, match="empty body"):
+            result.json()
+
+    def test_the_message_says_the_request_was_fine(self) -> None:
+        from radar.pipeline.http import EmptyResponseError, FetchResult
+
+        result = FetchResult(
+            url="https://api.example.org/details/0",
+            status_code=200,
+            text="   \n  ",
+            content_type="application/json",
+        )
+        with pytest.raises(EmptyResponseError, match="Nothing was wrong with the request"):
+            result.json()
+
+    def test_malformed_json_still_reports_as_malformed(self) -> None:
+        from radar.pipeline.http import FetchResult, InvalidJsonError
+
+        result = FetchResult(
+            url="https://api.example.org/details/0",
+            status_code=200,
+            text="<html>502</html>",
+            content_type="text/html",
+        )
+        with pytest.raises(InvalidJsonError, match="did not return JSON"):
+            result.json()
