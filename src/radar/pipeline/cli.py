@@ -10,6 +10,7 @@ radar label check FILE      verify the labels, including every quote
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from collections import Counter
@@ -419,26 +420,54 @@ def cmd_triage_estimate(args: argparse.Namespace) -> int:
     stage_two_system = estimate_tokens(STAGE_TWO_SYSTEM)
     abstract_tokens = [estimate_tokens(a) for a in (abstracts or []) if a] or [350]
     mean_abstract = sum(abstract_tokens) // len(abstract_tokens)
+
+    # Two output figures, not one. The ceiling is a real upper bound, but it is
+    # 6x a typical decision, so quoting it alone flags "over budget" on a design
+    # that probably costs half the budget — which is misleading in the other
+    # direction, and would push someone into narrowing sources they need. A
+    # pessimistic number is not automatically the honest one. Both ends, with the
+    # basis for each named, and the first live run replaces both.
+    typical_out = estimate_tokens(
+        json.dumps(
+            {
+                "relevant": True,
+                "confidence": "high",
+                "reason": "Reports a measured gate fidelity on a logical qubit.",
+                "domains": ["quantum"],
+                "technology_mentions": ["logical qubit", "surface code"],
+            }
+        )
+    )
+
     print(
         f"\nstage two, per document: {stage_two_system:,} prompt + ~{mean_abstract:,} "
-        f"abstract in, up to {STAGE_TWO_MAX_TOKENS} out"
+        f"abstract in, {typical_out}-{STAGE_TWO_MAX_TOKENS} out"
     )
-    print("  cost for one day of this corpus, by how many documents stage one passes:")
-    for share_passing in (0.10, 0.20, 0.40, 0.60, 1.00):
-        survivors = int(len(candidates) * share_passing)
+    print("  both stages, per month, by how many documents stage one passes:")
+    print(f"    {'pass':>5}  {'docs':>5}   {'typical':>9}  {'at ceiling':>11}")
+
+    def monthly(survivors: int, out_per_doc: int) -> Decimal:
         two_in = survivors * (stage_two_system + mean_abstract + 12)
-        two_out = survivors * STAGE_TWO_MAX_TOKENS
+        two_out = survivors * out_per_doc
         two = discount * (
             price.input_per_mtok * Decimal(two_in) / million
             + price.output_per_mtok * Decimal(two_out) / million
         )
-        monthly = (cost + two) * 30
-        flag = "  <-- over $20/month" if monthly > 20 else ""
-        print(
-            f"    {share_passing:>5.0%}  {survivors:>5} docs   "
-            f"${two:.2f}/day   both stages ~${monthly:.2f}/month{flag}"
-        )
-    print("  (output is costed at the ceiling, so these are upper bounds)")
+        return (cost + two) * 30
+
+    for share_passing in (0.10, 0.20, 0.40, 0.60, 1.00):
+        survivors = int(len(candidates) * share_passing)
+        low = monthly(survivors, typical_out)
+        high = monthly(survivors, STAGE_TWO_MAX_TOKENS)
+        # Flagged only when the optimistic end is over. A flag that fires on the
+        # pessimistic end alone is a flag nobody can act on.
+        flag = "  <-- over $20/month even if decisions are terse" if low > 20 else ""
+        print(f"    {share_passing:>5.0%}  {survivors:>5}   ${low:>8.2f}  ${high:>10.2f}{flag}")
+    print(
+        f"  typical assumes a one-sentence reason and one or two domains "
+        f"({typical_out} output tokens); the ceiling is {STAGE_TWO_MAX_TOKENS}, "
+        "which only a maximal decision reaches"
+    )
 
     print("\nNothing was sent. No API key was read.")
     return 0
