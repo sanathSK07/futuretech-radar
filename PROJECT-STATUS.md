@@ -7,6 +7,7 @@ Living tracker. Update at the end of every working session. Newest entries first
 
 ## Current task
 
+- **Next: the triage prompts and the stage-one screen.** The model boundary (`llm.py`) is in: a `ModelClient` protocol, a `ScriptedClient` for tests and evals that costs nothing, an `AnthropicClient`, and a sourced price table with batch discounting. 362 tests, no API key needed by any of them.
 - **Build the two-stage model triage** (ADR-0008): stage 1 reads the title alone and returns one token; stage 2 reads the abstract for survivors and returns a `TriageDecision`. Non-arXiv sources skip stage 1. Estimated ~$8/month against a measured 2,738 arXiv documents a day; the 20% survival rate in that estimate is an assumption and the first live run replaces it.
 - **SK, outstanding:** GitHub repo secrets `RADAR_DATABASE_URL` and `RADAR_CRAWLER_CONTACT`; merge the two Dependabot PRs; enable Dependabot alerts; delete the Neon-downloaded `.env` from Downloads.
 - **Blocked on nothing.** bioRxiv is failing on their side, not ours (see below).
@@ -580,6 +581,8 @@ uses HTTPS directly, and a test asserts the scheme so it cannot regress.
 
 ## Technical debt (known at design time, accepted)
 
+- The Messages API (via anthropic SDK 1.8.0) exposes no `temperature` parameter, so pipeline calls cannot be pinned to greedy decoding. The Phase 3 eval therefore cannot assume a prompt change is the only thing that moved between two runs; it has to sample each document more than once or state the noise it accepts. An earlier draft of `llm.py` carried a `temperature=0.0` field that would have been silently dropped while reading like a guarantee — removed, with the reason in a test.
+- `output_config.format` (JSON-schema-constrained output) looks like a better fit for extraction than asking for a shape in the prompt, since a shape the API refuses to emit cannot become a `schema_error` downstream. Wired into `ModelRequest.json_schema` but **unverified against the live API**; the first real extraction run is the check.
 - Single admin token instead of user auth (ADR-0005). Replace in Phase 4.
 - Review UI is a table, not a workflow product.
 - No trend, alert, report or graph features; schema supports them.
