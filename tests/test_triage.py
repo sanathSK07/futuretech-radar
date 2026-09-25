@@ -8,6 +8,8 @@ model entirely.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from radar.core.types import SourceKind
@@ -17,6 +19,7 @@ from radar.pipeline.triage import (
     DEFAULT_CHUNK_SIZE,
     STAGE_ONE_SYSTEM,
     STAGE_TWO_DOMAINS,
+    STAGE_TWO_MAX_TOKENS,
     STAGE_TWO_SYSTEM,
     TOKENS_PER_VERDICT,
     TRIAGE_DECISION_SCHEMA,
@@ -437,3 +440,38 @@ class TestTriageDocument:
         )
         with pytest.raises(TriageParseError, match="token ceiling"):
             triage_document(client, document_id="d", title="t", abstract="a")
+
+
+class TestTheStageTwoCeiling:
+    """The output ceiling is the dominant cost line, so it is derived, not chosen."""
+
+    @staticmethod
+    def _largest_valid_decision() -> str:
+        """The biggest object the contract will accept, serialised."""
+        return json.dumps(
+            TriageDecision(
+                relevant=True,
+                confidence="medium",
+                reason="x" * 400,  # the contract's own cap
+                domains=list(STAGE_TWO_DOMAINS),
+                technology_mentions=["a reasonably long technology mention string"] * 8,
+            ).model_dump()
+        )
+
+    def test_the_ceiling_is_derived_from_the_contract(self) -> None:
+        """It must cover the largest decision the contract permits.
+
+        Otherwise a legitimately verbose but valid decision truncates, and the
+        run fails on a document that was never malformed.
+        """
+        needed = estimate_tokens(self._largest_valid_decision())
+        assert needed < STAGE_TWO_MAX_TOKENS
+
+    def test_and_is_not_wastefully_larger_than_that(self) -> None:
+        """The estimate prices every document at this ceiling, so slack here
+        inflates the projected bill directly. It was 400 on the first pass —
+        roughly 70% above anything the contract would accept — which made 20%
+        survival look like it broke the budget.
+        """
+        needed = estimate_tokens(self._largest_valid_decision())
+        assert needed * 2 > STAGE_TWO_MAX_TOKENS

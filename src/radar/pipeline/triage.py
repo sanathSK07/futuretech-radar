@@ -341,12 +341,23 @@ def estimate_tokens(text: str) -> int:
 
 # --------------------------------------------------------------------- stage two ---
 
-STAGE_TWO_MAX_TOKENS = 400
-"""Room for a decision object and no more.
+STAGE_TWO_MAX_TOKENS = 288
+"""Room for the largest decision the contract permits, plus margin.
 
-Generous next to the four tokens stage one needs, and still a ceiling: a model
-that starts writing an essay in ``reason`` gets truncated, and truncated JSON
-fails validation loudly rather than being stored as a short explanation.
+Derived rather than chosen. ``TriageDecision`` caps ``reason`` at 400 characters
+and ``domains`` at the six slugs; the largest *valid* object, with a full-length
+reason, all six domains and eight long mentions, serialises to about 234 tokens.
+A typical one is nearer 50.
+
+This was 400 on the first pass, picked as "generous next to the four tokens stage
+one needs". Generous is the wrong instinct here: output is the expensive half, and
+the estimate costs every document at this ceiling, so 400 inflated the projected
+bill by roughly 70% over anything the contract would accept. See
+``test_the_ceiling_is_derived_from_the_contract``.
+
+Lowering it is safe in the way that matters: truncation raises
+``TriageParseError`` rather than being parsed, so a ceiling set too low fails
+loudly on the first run instead of quietly storing half a decision.
 """
 
 STAGE_TWO_DOMAINS = ("ai", "robotics", "quantum", "semiconductors", "energy", "biotech")
