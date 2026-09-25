@@ -51,9 +51,23 @@ from radar.pipeline.http import SafeHttpClient
 
 log = structlog.get_logger(__name__)
 
-ARXIV_OAI_URL = "https://export.arxiv.org/oai2"
-"""Verified live on 2026-09-21. ``oaipmh.arxiv.org``, named in some third-party
-guides, answers 404; this is the host arXiv's own documentation gives."""
+ARXIV_OAI_URL = "https://oaipmh.arxiv.org/oai"
+"""The endpoint after arXiv's own redirect, not the one before it.
+
+``https://export.arxiv.org/oai2`` answers ``301`` to this URL — observed on
+every one of eleven sources in the first live harvest, 2026-09-24. Pointing at
+the pre-redirect host cost a wasted rate-limit wait on every request, because
+the limiter runs before each redirect hop: the same three-second-per-fetch bug
+already fixed once for the Atom API's ``http://`` form.
+
+An earlier note here claimed ``oaipmh.arxiv.org`` answers 404. That was wrong,
+and wrong in a specific way worth recording: the 404 came from requesting
+``/oai2`` on this host. The path here is ``/oai``. A single probe of a hostname
+says nothing about the endpoint unless the path is right.
+
+If arXiv moves it again the ``301`` will still be followed, so a stale value
+here costs a wasted hop rather than a failure.
+"""
 
 OAI = "{http://www.openarchives.org/OAI/2.0/}"
 ARXIV_META = "{http://arxiv.org/OAI/arXiv/}"

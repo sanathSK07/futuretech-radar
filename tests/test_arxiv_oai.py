@@ -198,6 +198,16 @@ class TestUrls:
         assert "from=2026-09-21" in seen[0]
         assert "set=cs%3Acs%3ARO" in seen[0]
 
+    def test_the_endpoint_is_the_one_arxiv_redirects_to(self) -> None:
+        """Pin the post-redirect host, because the hop is not free.
+
+        The rate limiter runs before every redirect hop, so pointing at
+        export.arxiv.org/oai2 spends a three-second wait on each of eleven
+        sources to be told where to go. Observed 301 -> this URL on every source
+        in the first live harvest, 2026-09-24.
+        """
+        assert ARXIV_OAI_URL == "https://oaipmh.arxiv.org/oai"
+
     def test_the_window_is_floored_to_a_day(self) -> None:
         """OAI's granularity is a date; a timestamp is a badArgument."""
         client, seen = client_for(fixture_text("arxiv_oai_error.xml"))
