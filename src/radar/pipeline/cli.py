@@ -381,8 +381,9 @@ def cmd_triage_estimate(args: argparse.Namespace) -> int:
     print(f"{len(candidates)} documents stored")
     print(f"  {len(screened)} would be screened by stage one")
     print(f"  {skipped} skip the model entirely (non-arXiv sources go straight to stage two)")
-    print(f"\nestimated tokens: {input_tokens:,} in, {output_tokens:,} out")
-    print(f"  system prompt is {system_tokens:,} tokens, sent once per document")
+    print(f"\n{chunks:,} requests at up to {chunk_size} titles each")
+    print(f"estimated tokens: {input_tokens:,} in, {output_tokens:,} out")
+    print(f"  system prompt is {system_tokens:,} tokens, sent once per REQUEST")
     rate = "list" if args.list_price else "batch"
     print(f"  ~${cost:.2f} at {rate} rates for this corpus")
     if not args.list_price:
